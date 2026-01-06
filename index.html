@@ -18,7 +18,7 @@
     <!-- SheetJS para Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
-    <!-- Firebase SDKs (Ahora incluye AUTH) -->
+    <!-- Firebase SDKs (Compatibles) -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
@@ -45,7 +45,8 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // --- 1. CONFIGURACIÓN DE FIREBASE (Tus Credenciales Reales) ---
+        // --- 1. CONFIGURACIÓN DE FIREBASE ---
+        // IMPORTANTE: Si creaste un proyecto nuevo, reemplaza esto con tus nuevas credenciales.
         const firebaseConfig = {
             apiKey: "AIzaSyCX-X4DAFfA6_U19NbnAPVgpmleYMveaMk",
             authDomain: "evaluacion-aurora.firebaseapp.com",
@@ -55,7 +56,7 @@
             appId: "1:597070461794:web:c236693c4d2a05c0428a3b"
         };
 
-        // Inicialización segura de Firebase y Auth
+        // Inicialización segura
         let db = null;
         let auth = null;
         let firebaseReady = false;
@@ -66,7 +67,7 @@
                 firebase.app(); 
             }
             db = firebase.firestore();
-            auth = firebase.auth(); // Inicializar Auth
+            auth = firebase.auth();
             firebaseReady = true;
         } catch (error) { console.error("Error inicializando Firebase:", error); }
 
@@ -141,63 +142,53 @@
             const [isDownloading, setIsDownloading] = useState(false);
             const [user, setUser] = useState(null);
 
-            // Efecto para Autenticación Anónima
+            // AUTO-LOGIN ANÓNIMO AL INICIAR
             useEffect(() => {
                 if (firebaseReady && auth) {
-                    auth.signInAnonymously()
-                        .then((userCredential) => {
-                            console.log("Autenticado anónimamente:", userCredential.user.uid);
-                            setUser(userCredential.user);
-                        })
-                        .catch((error) => {
-                            console.error("Error en autenticación anónima:", error);
-                        });
+                    auth.onAuthStateChanged((u) => {
+                        if (u) {
+                            setUser(u);
+                        } else {
+                            auth.signInAnonymously().catch(e => console.error("Error Auth:", e));
+                        }
+                    });
                 }
             }, []);
 
-            // Cargar historial en tiempo real (Solo si hay usuario autenticado)
+            // Cargar historial en tiempo real
             useEffect(() => {
-                if (firebaseReady && db) { // Intentar cargar incluso si user es null por si las reglas son públicas, pero user ayuda
+                if (firebaseReady && db) {
                     const unsubscribe = db.collection("evaluaciones").orderBy("id", "desc").onSnapshot((s) => {
                         setHistory(s.docs.map(d => d.data()));
                     }, (error) => {
-                        console.error("Error cargando historial (posible falta de permisos):", error);
+                        console.error("Error cargando historial:", error);
                     });
                     return () => unsubscribe();
                 }
-            }, [user]); // Re-ejecutar cuando tengamos usuario
+            }, [user]);
 
-            // Filtros Inteligentes (Bloqueo de Duplicados)
+            // Filtros Inteligentes
             const areasUnicas = useMemo(() => [...new Set(PERSONAL_DB.map(p => p.area))].sort(), []);
             
             const personalFiltrado = useMemo(() => {
                 if (!areaObjetivo) return [];
                 let lista = PERSONAL_DB.filter(p => p.area === areaObjetivo);
-                
                 if (evaluadorJson) {
                     try {
                         const evaluadorObj = JSON.parse(evaluadorJson);
-                        
-                        // 1. Bloqueo de Auto-evaluación
                         lista = lista.filter(p => p.nombre.toLowerCase().trim() !== evaluadorObj.nombre.toLowerCase().trim());
-
-                        // 2. Bloqueo de Duplicados (Ya evaluados por mi)
                         const yaEvaluados = new Set(
                             history
                                 .filter(h => h.evaluador_nombre === evaluadorObj.nombre)
                                 .map(h => h.evaluado_nombre)
                         );
-                        
                         lista = lista.filter(p => !yaEvaluados.has(p.nombre));
-
                     } catch(e) {}
                 }
-                
                 return lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
             }, [areaObjetivo, evaluadorJson, history]);
 
             const handleScore = (key, val) => setScores(prev => ({ ...prev, [key]: parseInt(val) }));
-
             const handleEvaluadoChange = (e) => {
                 const nombre = e.target.value;
                 const persona = personalFiltrado.find(p => p.nombre === nombre);
@@ -206,7 +197,7 @@
 
             const guardarEvaluacion = async () => {
                 if (!evaluadorJson || !evaluadoObj || Object.values(scores).some(v => v === null)) {
-                    setMensaje("⚠️ Faltan campos por completar."); 
+                    setMensaje("⚠️ Faltan campos."); 
                     setTimeout(() => setMensaje(""), 3000); 
                     return;
                 }
@@ -218,15 +209,12 @@
                 const registro = {
                     id: Date.now(),
                     fecha: new Date().toLocaleDateString("es-CL"),
-                    // Datos del Evaluador
                     evaluador_nombre: evaluadorData.nombre, 
                     evaluador_cargo: evaluadorData.cargo,
                     evaluador_area: evaluadorData.area,
-                    // Datos del Evaluado
                     evaluado_nombre: evaluadoObj.nombre,
                     evaluado_rut: evaluadoObj.rut || "S/I", 
                     evaluado_area: areaObjetivo,
-                    // Notas
                     ...scores,
                     promedio: promedio.toFixed(2),
                     comentarios: comentario || "Sin comentarios"
@@ -234,21 +222,20 @@
 
                 if (firebaseReady && db) {
                     try {
-                        const docRef = await db.collection("evaluaciones").add(registro);
-                        setMensaje("✅ Guardado exitosamente en Nube.");
+                        // Asegurar login antes de guardar
+                        if (!auth.currentUser) await auth.signInAnonymously();
                         
-                        // ALERTA DE DEPURACIÓN PARA CONFIRMAR ESCRITURA REAL
-                        alert(`✅ ¡GUARDADO EXITOSO!\n\nSe ha creado el documento en Firebase con ID:\n${docRef.id}\n\nInstrucciones:\n1. Ve a tu Consola de Firebase.\n2. Asegúrate de estar en 'Firestore Database' (no Realtime).\n3. Busca la colección 'evaluaciones'.`);
-                        
+                        await db.collection("evaluaciones").add(registro);
+                        setMensaje("✅ Guardado exitosamente.");
                     } catch (e) {
-                        setMensaje("❌ Error al guardar en nube: " + e.message);
-                        // ALERTA DE DEPURACIÓN PARA ERRORES
-                        alert(`❌ ERROR AL GUARDAR:\n\n${e.message}\n\nCódigo: ${e.code}\n\nVerifica:\n1. Reglas de seguridad.\n2. Conexión a internet.\n3. Que el proyecto sea 'evaluacion-aurora'.`);
+                        console.error(e);
+                        setMensaje("❌ Error en Nube: " + e.message);
+                        // Fallback local visual
+                        setHistory([registro, ...history]);
                     }
                 } else {
                     setHistory([registro, ...history]);
-                    setMensaje("⚠️ Guardado Local (Sin conexión a BD).");
-                    alert("⚠️ GUARDADO SOLO EN LOCAL\n\nNo se detectó conexión a Firebase. Los datos se perderán al recargar.");
+                    setMensaje("⚠️ Guardado Local (Offline).");
                 }
                 
                 setIsSaving(false); 
@@ -258,46 +245,16 @@
                 setTimeout(() => setMensaje(""), 3000);
             };
 
-            // --- FUNCIÓN DE DESCARGA EXCEL MEJORADA ---
             const exportarExcel = async () => {
                 setIsDownloading(true);
                 let datosRaw = [];
-                let origenDatos = "Base de Datos";
-
                 try {
-                    // 1. Intentar obtener datos frescos de Firebase
                     if (firebaseReady && db) {
-                        try {
-                            // Asegurar autenticación si no está lista
-                            if (!auth.currentUser) await auth.signInAnonymously();
-                            
-                            const snapshot = await db.collection("evaluaciones").get();
-                            datosRaw = snapshot.docs.map(doc => doc.data());
-                            
-                            if (datosRaw.length === 0) {
-                                console.warn("La colección 'evaluaciones' está vacía en Firebase.");
-                            }
-                        } catch (firebaseError) {
-                            console.error("Error leyendo Firebase:", firebaseError);
-                            
-                            // Fallback Inteligente: Ofrecer descargar historial local
-                            const usarLocal = confirm(
-                                `Error de Permisos o Conexión: ${firebaseError.message}\n\n` +
-                                `Esto suele ocurrir si no estás autenticado o las reglas de seguridad son estrictas.\n` + 
-                                `¿Deseas descargar los datos que ves en pantalla (Historial Local) en su lugar?`
-                            );
-
-                            if (usarLocal) {
-                                datosRaw = history;
-                                origenDatos = "Historial Local (Respaldo)";
-                            } else {
-                                setIsDownloading(false);
-                                return;
-                            }
-                        }
+                        if (!auth.currentUser) await auth.signInAnonymously();
+                        const snapshot = await db.collection("evaluaciones").get();
+                        datosRaw = snapshot.docs.map(doc => doc.data());
                     } else {
-                        datosRaw = history; // Fallback para modo sin conexión
-                        origenDatos = "Modo Offline";
+                        datosRaw = history;
                     }
 
                     if (datosRaw.length === 0) {
@@ -305,27 +262,18 @@
                         setIsDownloading(false);
                         return;
                     }
-                    
-                    // 2. Procesar para privacidad (Quitar datos del evaluador)
+
                     const datosAnonimos = datosRaw.map(item => {
-                        // Extraemos y descartamos los datos sensibles
                         const { evaluador_nombre, evaluador_cargo, evaluador_area, id, ...resto } = item;
-                        return { 
-                            ...resto, 
-                            "Origen Datos": origenDatos,
-                            "Estado": "Confidencial"
-                        };
+                        return { ...resto, "Origen": "BD", "Confidencial": "SI" };
                     });
 
-                    // 3. Generar Excel
                     const ws = XLSX.utils.json_to_sheet(datosAnonimos);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, "Evaluaciones");
                     XLSX.writeFile(wb, "Evaluaciones_Confidenciales_Aurora.xlsx");
-
                 } catch (error) {
-                    console.error("Error crítico al exportar:", error);
-                    alert(`Error inesperado al generar el archivo: ${error.message}`);
+                    alert("Error al exportar: " + error.message);
                 }
                 setIsDownloading(false);
             };
