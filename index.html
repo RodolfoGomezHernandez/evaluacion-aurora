@@ -18,9 +18,10 @@
     <!-- SheetJS para Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
 
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs (Ahora incluye AUTH) -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: #f0fdf4; }
@@ -54,8 +55,9 @@
             appId: "1:597070461794:web:c236693c4d2a05c0428a3b"
         };
 
-        // Inicialización segura de Firebase
+        // Inicialización segura de Firebase y Auth
         let db = null;
+        let auth = null;
         let firebaseReady = false;
         try {
             if (!firebase.apps.length) {
@@ -64,6 +66,7 @@
                 firebase.app(); 
             }
             db = firebase.firestore();
+            auth = firebase.auth(); // Inicializar Auth
             firebaseReady = true;
         } catch (error) { console.error("Error inicializando Firebase:", error); }
 
@@ -136,18 +139,33 @@
             const [mensaje, setMensaje] = useState("");
             const [isSaving, setIsSaving] = useState(false);
             const [isDownloading, setIsDownloading] = useState(false);
+            const [user, setUser] = useState(null);
 
-            // Cargar historial en tiempo real
+            // Efecto para Autenticación Anónima
             useEffect(() => {
-                if (firebaseReady && db) {
+                if (firebaseReady && auth) {
+                    auth.signInAnonymously()
+                        .then((userCredential) => {
+                            console.log("Autenticado anónimamente:", userCredential.user.uid);
+                            setUser(userCredential.user);
+                        })
+                        .catch((error) => {
+                            console.error("Error en autenticación anónima:", error);
+                        });
+                }
+            }, []);
+
+            // Cargar historial en tiempo real (Solo si hay usuario autenticado)
+            useEffect(() => {
+                if (firebaseReady && db) { // Intentar cargar incluso si user es null por si las reglas son públicas, pero user ayuda
                     const unsubscribe = db.collection("evaluaciones").orderBy("id", "desc").onSnapshot((s) => {
                         setHistory(s.docs.map(d => d.data()));
                     }, (error) => {
-                        console.error("Error cargando historial:", error);
+                        console.error("Error cargando historial (posible falta de permisos):", error);
                     });
                     return () => unsubscribe();
                 }
-            }, []);
+            }, [user]); // Re-ejecutar cuando tengamos usuario
 
             // Filtros Inteligentes (Bloqueo de Duplicados)
             const areasUnicas = useMemo(() => [...new Set(PERSONAL_DB.map(p => p.area))].sort(), []);
@@ -216,14 +234,21 @@
 
                 if (firebaseReady && db) {
                     try {
-                        await db.collection("evaluaciones").add(registro);
+                        const docRef = await db.collection("evaluaciones").add(registro);
                         setMensaje("✅ Guardado exitosamente en Nube.");
+                        
+                        // ALERTA DE DEPURACIÓN PARA CONFIRMAR ESCRITURA REAL
+                        alert(`✅ ¡GUARDADO EXITOSO!\n\nSe ha creado el documento en Firebase con ID:\n${docRef.id}\n\nInstrucciones:\n1. Ve a tu Consola de Firebase.\n2. Asegúrate de estar en 'Firestore Database' (no Realtime).\n3. Busca la colección 'evaluaciones'.`);
+                        
                     } catch (e) {
                         setMensaje("❌ Error al guardar en nube: " + e.message);
+                        // ALERTA DE DEPURACIÓN PARA ERRORES
+                        alert(`❌ ERROR AL GUARDAR:\n\n${e.message}\n\nCódigo: ${e.code}\n\nVerifica:\n1. Reglas de seguridad.\n2. Conexión a internet.\n3. Que el proyecto sea 'evaluacion-aurora'.`);
                     }
                 } else {
                     setHistory([registro, ...history]);
                     setMensaje("⚠️ Guardado Local (Sin conexión a BD).");
+                    alert("⚠️ GUARDADO SOLO EN LOCAL\n\nNo se detectó conexión a Firebase. Los datos se perderán al recargar.");
                 }
                 
                 setIsSaving(false); 
@@ -243,6 +268,9 @@
                     // 1. Intentar obtener datos frescos de Firebase
                     if (firebaseReady && db) {
                         try {
+                            // Asegurar autenticación si no está lista
+                            if (!auth.currentUser) await auth.signInAnonymously();
+                            
                             const snapshot = await db.collection("evaluaciones").get();
                             datosRaw = snapshot.docs.map(doc => doc.data());
                             
@@ -254,7 +282,8 @@
                             
                             // Fallback Inteligente: Ofrecer descargar historial local
                             const usarLocal = confirm(
-                                `Error conectando a la Base de Datos: ${firebaseError.message}\n\n` +
+                                `Error de Permisos o Conexión: ${firebaseError.message}\n\n` +
+                                `Esto suele ocurrir si no estás autenticado o las reglas de seguridad son estrictas.\n` + 
                                 `¿Deseas descargar los datos que ves en pantalla (Historial Local) en su lugar?`
                             );
 
@@ -327,7 +356,8 @@
                         <div className="text-right flex items-center gap-3">
                              <div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-2 ${firebaseReady ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                 <div className={`w-2 h-2 rounded-full ${firebaseReady ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                {firebaseReady ? 'Base de Datos Conectada' : 'Modo Local'}
+                                {firebaseReady ? 'Conectado' : 'Modo Local'}
+                                {user && <span className="hidden md:inline ml-1 opacity-75">| ID: {user.uid.slice(0,4)}...</span>}
                             </div>
                         </div>
                     </header>
