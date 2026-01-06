@@ -142,6 +142,8 @@
                 if (firebaseReady && db) {
                     const unsubscribe = db.collection("evaluaciones").orderBy("id", "desc").onSnapshot((s) => {
                         setHistory(s.docs.map(d => d.data()));
+                    }, (error) => {
+                        console.error("Error cargando historial:", error);
                     });
                     return () => unsubscribe();
                 }
@@ -217,7 +219,7 @@
                         await db.collection("evaluaciones").add(registro);
                         setMensaje("✅ Guardado exitosamente en Nube.");
                     } catch (e) {
-                        setMensaje("❌ Error al guardar en nube.");
+                        setMensaje("❌ Error al guardar en nube: " + e.message);
                     }
                 } else {
                     setHistory([registro, ...history]);
@@ -231,23 +233,46 @@
                 setTimeout(() => setMensaje(""), 3000);
             };
 
-            // --- FUNCIÓN DE DESCARGA EXCEL CORREGIDA ---
-            // Ahora descarga directamente desde la BD para asegurar que están todos los datos
+            // --- FUNCIÓN DE DESCARGA EXCEL MEJORADA ---
             const exportarExcel = async () => {
                 setIsDownloading(true);
-                try {
-                    let datosRaw = [];
+                let datosRaw = [];
+                let origenDatos = "Base de Datos";
 
-                    // 1. Obtener datos frescos de Firebase
+                try {
+                    // 1. Intentar obtener datos frescos de Firebase
                     if (firebaseReady && db) {
-                        const snapshot = await db.collection("evaluaciones").get();
-                        datosRaw = snapshot.docs.map(doc => doc.data());
+                        try {
+                            const snapshot = await db.collection("evaluaciones").get();
+                            datosRaw = snapshot.docs.map(doc => doc.data());
+                            
+                            if (datosRaw.length === 0) {
+                                console.warn("La colección 'evaluaciones' está vacía en Firebase.");
+                            }
+                        } catch (firebaseError) {
+                            console.error("Error leyendo Firebase:", firebaseError);
+                            
+                            // Fallback Inteligente: Ofrecer descargar historial local
+                            const usarLocal = confirm(
+                                `Error conectando a la Base de Datos: ${firebaseError.message}\n\n` +
+                                `¿Deseas descargar los datos que ves en pantalla (Historial Local) en su lugar?`
+                            );
+
+                            if (usarLocal) {
+                                datosRaw = history;
+                                origenDatos = "Historial Local (Respaldo)";
+                            } else {
+                                setIsDownloading(false);
+                                return;
+                            }
+                        }
                     } else {
-                        datosRaw = history; // Fallback local
+                        datosRaw = history; // Fallback para modo sin conexión
+                        origenDatos = "Modo Offline";
                     }
 
                     if (datosRaw.length === 0) {
-                        alert("No hay datos para exportar en la base de datos.");
+                        alert("No hay datos para exportar.");
                         setIsDownloading(false);
                         return;
                     }
@@ -258,6 +283,7 @@
                         const { evaluador_nombre, evaluador_cargo, evaluador_area, id, ...resto } = item;
                         return { 
                             ...resto, 
+                            "Origen Datos": origenDatos,
                             "Estado": "Confidencial"
                         };
                     });
@@ -269,8 +295,8 @@
                     XLSX.writeFile(wb, "Evaluaciones_Confidenciales_Aurora.xlsx");
 
                 } catch (error) {
-                    console.error("Error al exportar:", error);
-                    alert("Hubo un error al intentar descargar los datos.");
+                    console.error("Error crítico al exportar:", error);
+                    alert(`Error inesperado al generar el archivo: ${error.message}`);
                 }
                 setIsDownloading(false);
             };
