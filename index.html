@@ -3,39 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Evaluación de Desempeño - Aurora Australis S.A.</title>
+    <title>Evaluación 360° - Aurora Australis</title>
     
-    <!-- React y ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel para compilar JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- SheetJS para Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
-
-    <!-- Firebase SDKs (Solo Firestore, sin Auth) -->
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', system-ui, sans-serif; background-color: #f0fdf4; }
-        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .input-field { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; background-color: #f9fafb; transition: all 0.2s; }
-        .input-field:focus { border-color: #16a34a; outline: none; ring: 2px solid #16a34a; background-color: white; }
-        .btn { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: all 0.2s; cursor: pointer; }
-        .btn-primary { background-color: #15803d; color: white; }
-        .btn-primary:hover { background-color: #14532d; shadow: 0 4px 6px -1px rgba(21, 128, 61, 0.4); }
-        .radio-label { cursor: pointer; transition: all 0.2s; user-select: none; }
-        .radio-label:hover { background-color: #f0fdf4; transform: translateY(-1px); }
-        .loader { border: 3px solid #f3f3f3; border-radius: 50%; border-top: 3px solid #16a34a; width: 20px; height: 20px; -webkit-animation: spin 1s linear infinite; animation: spin 1s linear infinite; }
-        .avatar-img { width: 80px; height: 80px; object-fit: cover; border-radius: 50%; border: 3px solid #16a34a; background-color: #fff; }
-        .avatar-placeholder { width: 80px; height: 80px; border-radius: 50%; background-color: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #9ca3af; border: 3px solid #d1d5db; }
+        .card-shadow { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+        .avatar-img { object-fit: cover; border: 3px solid #16a34a; background-color: #fff; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #16a34a; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -44,7 +29,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
 
-        // --- 1. CONFIGURACIÓN DE FIREBASE ---
+        // --- 1. CONFIGURACIÓN FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyCX-X4DAFfA6_U19NbnAPVgpmleYMveaMk",
             authDomain: "evaluacion-aurora.firebaseapp.com",
@@ -54,161 +39,541 @@
             appId: "1:597070461794:web:c236693c4d2a05c0428a3b"
         };
 
-        // Inicialización simple (Sin Auth)
         let db = null;
         let firebaseReady = false;
-        let initError = null;
-
         try {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            } else {
-                firebase.app(); 
-            }
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            else firebase.app();
             db = firebase.firestore();
             firebaseReady = true;
-        } catch (error) { 
-            console.error("Error inicializando Firebase:", error);
-            initError = error.message;
-        }
+        } catch (error) { console.error("Firebase Error:", error); }
 
-        // --- 2. BASE DE DATOS DE PERSONAL ---
-        const JEFATURAS = [
-            { nombre: "Germán Samaniego", cargo: "Gerente General", area: "Gerencia General", rut: "" },
-            { nombre: "Robinson Fuentes", cargo: "Gerente Adm. y Finanzas", area: "Adm. y Finanzas", rut: "" },
-            { nombre: "Francisco Carrasco", cargo: "Gerente Operaciones", area: "Operaciones", rut: "" },
-            { nombre: "Jerónimo Concha", cargo: "Gerente Técnico", area: "Gerencia Técnica", rut: "" },
-            { nombre: "Gianina Salazar", cargo: "Gerente Aseg. Calidad", area: "Aseguramiento de Calidad", rut: "" },
-            { nombre: "Carla Fernández", cargo: "Jefe Desarrollo Org.", area: "RRHH", rut: "" },
-            { nombre: "Valentina Muñoz", cargo: "Jefe Comex", area: "Comex", rut: "" },
-            { nombre: "Alejandro Mardones", cargo: "Jefe Informática/Compras", area: "Adm. y Finanzas", rut: "" },
-            { nombre: "José Ayala", cargo: "Jefe Contabilidad", area: "Adm. y Finanzas", rut: "" },
-            { nombre: "Andrea Elías", cargo: "Jefe Remuneraciones", area: "RRHH", rut: "" },
-            { nombre: "Tamara Ortega", cargo: "Encargada Tesorería", area: "Adm. y Finanzas", rut: "" },
-            { nombre: "Claudio Castro", cargo: "Jefe Planta", area: "Operaciones", rut: "018.806.604-6" },
-            { nombre: "Rodrigo Astudillo", cargo: "Jefe Packing", area: "Operaciones", rut: "010.203.356-6" },
-            { nombre: "Daniel Madrid", cargo: "Jefe Frigorífico", area: "Operaciones", rut: "" },
-            { nombre: "Alex Silva", cargo: "Jefe Bodega", area: "Operaciones", rut: "" },
-            { nombre: "Emanuel Navarro", cargo: "Jefe Mantención", area: "Operaciones", rut: "" },
-            { nombre: "Guillermo Negrete", cargo: "Jefe Sala de Máquinas", area: "Operaciones", rut: "" },
-            { nombre: "Elizabeth Espina", cargo: "Jefa Aseg. Calidad y SGI", area: "Aseguramiento de Calidad", rut: "" }
+        // --- 2. BASE DE DATOS MAESTRA (ACTUALIZADA DESDE LISTADO.txt) ---
+        const DB_MAESTRA = [
+            // GDO - DESARROLLO ORGANIZACIONAL
+            {rut:"009.743.891-9", nombre:"EDUARDO ENRIQUE MUÑOZ SOTO", cargo:"OPERADOR DE GRUA C", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"013.353.998-0", nombre:"VIVIANA DE LAS MERCE NAVARRO SALAZAR", cargo:"AUXILIAR ASEO EXTERIORES Y MAN", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"013.783.541-K", nombre:"RODOLFO LEONARDO MONARTE ROJAS", cargo:"JEFE DE TURNO PACKING", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"014.051.289-3", nombre:"HERNAN ALEJANDRO GUERRERO GUERRERO", cargo:"CHOFER", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"015.630.480-8", nombre:"LORETO CRISTINA ALIAGA ORTEGA", cargo:"ASISTENTE ADMINISTRATIVO", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"018.105.940-0", nombre:"ERIKA MARIA ARAVENA REYES", cargo:"ENC. DESARROLLO ORGANIZACIONA", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"018.681.549-1", nombre:"RODOLFO ANTONIO GOMEZ HERNANDEZ", cargo:"ASISTENTE ADMINISTRATIVO", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"020.705.356-2", nombre:"LUCAS BENJAMIN ALARCON HERVERA", cargo:"ASISTENTE PREVENCIÓN DE RIESGO", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"020.801.881-7", nombre:"ROCIO BELEN VALENZUELA PACHECO", cargo:"ASIST.DESARROLLO ORGANIZACIONA", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"021.543.478-8", nombre:"IGNACIA FERNANDA ORELLANA ROJAS", cargo:"ASIST.DESARROLLO ORGANIZACIONA", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+            {rut:"15128144-3", nombre:"JULIO GOMEZ HERNANDEZ", cargo:"JEFE PREVENCION DE RIESGOS", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
+
+            // OPERACIONES - BODEGA
+            {rut:"006.904.491-3", nombre:"JOSE ARMANDO MALDONADO RAMIREZ", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"006.938.595-8", nombre:"NELSON ENRIQUE LOPEZ SILVA", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"009.885.862-8", nombre:"ROBINSON EUDORO SANHUEZA NIEVAS", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"009.971.032-2", nombre:"EDUARDO ANTONIO CAMPOS MEDINA", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"010.321.483-1", nombre:"CECILIA DEL CARMEN CONTRERAS SALAS", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"011.282.224-0", nombre:"PAULINA LILIANA DUARTE ARRIOLA", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"011.953.030-K", nombre:"MARCO MARCELO GAETE BENAVIDES", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"013.351.960-2", nombre:"LUIS ALBERTO ALBORNOZ SALINAS", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"013.652.893-9", nombre:"CAMILO ENRIQUE VERA VALLADARES", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"013.676.404-7", nombre:"SUSANA XIMENA SILVA LICANDEO", cargo:"CONTROL DE ARMADO B", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"013.783.611-4", nombre:"KATIBEL ALEXANDRA ESPINOZA GUERRERO", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"013.784.009-K", nombre:"PABLO AUGUSTO NAVARRO BRIONES", cargo:"APOYO PAÑOL", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"014.014.974-8", nombre:"JOSE HERIBERTO ROJAS REYES", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"014.248.613-k", nombre:"CAROLA GABRIELA BRAVO TAPIA", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"015.567.132-7", nombre:"ROSARIO GORETTI GUTIERREZ GUTIERREZ", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"015.592.766-6", nombre:"FRANCISCO JAVIER PEREZ CONCHA", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"016.457.264-1", nombre:"PABLO SEBASTIAN GARRIDO GONZALEZ", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"016.589.223-2", nombre:"ANA MARIA GOMEZ SAN JUAN", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"017.873.237-4", nombre:"ERIC JACIEL QUEZADA FLORES", cargo:"ADMINISTRATIVO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"018.252.646-0", nombre:"ROBERTO ANTONIO GARRIDO HERRERA", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"018.382.798-7", nombre:"JEHISON EDUARDO DONOSO CARREÑO", cargo:"APOYO PAÑOL", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"018.576.727-2", nombre:"PEDRO EDUARDO ESPINOZA GAJARDO", cargo:"APOYO PAÑOL", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"019.008.559-7", nombre:"YOVANA DEL PILAR REBOLLEDO VALENZUELA", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"020.775.284-3", nombre:"EMELINA SOLEDAD HERRERA GUERRERO", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"020.815.220-3", nombre:"MILENKA CONSUELO VASCONCELOS BRAVO", cargo:"VERIFICADOR MATERIALES A", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"021.460.608-9", nombre:"JOCSAN FELIPE MADARIAGA SCHULZ", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"021.778.158-2", nombre:"VICENTE ANTONIO GONZALEZ BARRERA", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"022.413.110-0", nombre:"VICTORIA DEL PILAR MACHUCA MENDEZ", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"026.100.557-3", nombre:"MARIA PAULA BRICEÑO PINEDA", cargo:"CONTROL INVENTARIO Y BACKUP", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"026.392.110-0", nombre:"VICTOR ALFONZO LOPEZ ROBLES", cargo:"ENC.CONTROL ESPACIOS Y TRASLAD", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"026.711.333-5", nombre:"NELSON ANTONIO VERA ALBARRACIN", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"026.712.281-4", nombre:"CARLOS JOSE ROMERO RODRIGUEZ", cargo:"SUPERVISOR BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"026.799.241-K", nombre:"GUSTAVO ADOLFO RUSSIAN ROJAS", cargo:"OPERARIO BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"026.836.639-3", nombre:"JACELINI DE LAS MER BERMUDEZ OROZCO", cargo:"APOYO PAÑOL", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"027.052.127-4", nombre:"MIGUEL ALEJANDRO ROMERO RODRIGUEZ", cargo:"ADMINISTRATIVO BODEGA A", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"027.075.933-5", nombre:"KELVIS JOSE LEON HERNANDEZ", cargo:"APOYO PAÑOL", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"027.211.223-1", nombre:"ANDREINA KARINA BORREGALES BARBOZA", cargo:"ENCARGADO PAÑOL", area:"OPERACIONES", sector:"BODEGA"},
+            {rut:"13519353-4", nombre:"ALEX SILVA SILVA", cargo:"JEFE DE BODEGA", area:"OPERACIONES", sector:"BODEGA"},
+
+            // OPERACIONES - SADEMA
+            {rut:"014.052.543-K", nombre:"JOSE PATRICIO SILVA MUÑOZ", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"014.601.578-6", nombre:"PABLO ENRIQUE ALLENDES VELIZ", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"017.134.176-0", nombre:"CAMILO SALVADOR CAYUPI REYES", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"017.156.868-4", nombre:"SEBASTIAN NORMAN RAMIREZ VILLAVICENCIO", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"017.895.859-3", nombre:"JUAN GUILLERMO AVALOS ROJAS", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"018.253.465-K", nombre:"JOAN EDUARDO REYES BARAHONA", cargo:"COORDINADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"018.806.748-4", nombre:"ESTEBAN ALFONSO PEREZ VALENZUELA", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"018.884.860-5", nombre:"MATIAS NICOLAS CARO BOZO", cargo:"OPERADOR SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+            {rut:"9950921-K", nombre:"GUILLERMO NEGRETE MORAGA", cargo:"JEFE DE SADEMA", area:"OPERACIONES", sector:"SADEMA"},
+
+            // OPERACIONES - SAG
+            {rut:"018.457.064-5", nombre:"LISSETE ANALIA GUERRERO CÁCERES", cargo:"CONTRAPARTE TÉCNICA SAG", area:"OPERACIONES", sector:"SAG"},
+            {rut:"018.884.693-9", nombre:"MACARENA JACQUELINE GAETE BAHAMONDES", cargo:"DESPACHADOR AUTORIZADO SAG", area:"OPERACIONES", sector:"SAG"},
+            {rut:"018.884.778-1", nombre:"GUISELLE ANDREA BAHAMONDES GONZALEZ", cargo:"AYUDANTE SAG", area:"OPERACIONES", sector:"SAG"},
+            {rut:"019.587.973-7", nombre:"VALERIA DEL PILAR GAETE BAHAMONDES", cargo:"CONTRAPARTE SAG", area:"OPERACIONES", sector:"SAG"},
+            {rut:"019.610.901-3", nombre:"CAMILA ALEJANDRA CRUZ SALINAS", cargo:"AYUDANTE SAG", area:"OPERACIONES", sector:"SAG"},
+            {rut:"019.923.046-8", nombre:"NATALIA SOLEDAD LOPEZ MENDEZ", cargo:"DESPACHADOR AUTORIZADO SAG", area:"OPERACIONES", sector:"SAG"},
+            {rut:"16589719-6", nombre:"HEIMY FUENZALIDA VARAS", cargo:"JEFE SAG", area:"OPERACIONES", sector:"SAG"},
+
+            // OPERACIONES - PACKING (Selección representativa, lista completa muy extensa)
+            {rut:"008.282.950-4", nombre:"JUAN DE DIOS MENDOZA AVILA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"009.050.972-1", nombre:"LIDIA DEL CARMEN MADARIAGA MALDONADO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"009.061.892-K", nombre:"RAMIRO SEGUNDO CONCHA MELLAFFE", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"009.344.824-3", nombre:"ISABEL MARGARITA CARRASCO GUTIERREZ", cargo:"JEFE DE LINEA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"009.509.157-1", nombre:"BERNARDO AQUILES MUÑOZ PONCE", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"009.738.046-5", nombre:"GLORIA CAROLINA MORAGA SEPULVEDA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.203.356-6", nombre:"RODRIGO ALEJANDRO ASTUDILLO CORTES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.215.862-8", nombre:"GLORIA NEMESIA MUÑOZ GODOY", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.260.151-3", nombre:"AGUSTIN EVARISTO ROJAS SAEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.379.509-5", nombre:"LUZ MARIA BAHAMONDES VARGAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.451.191-0", nombre:"CECILIA DE LAS MERC RIVEROS RETAMALES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.554.797-8", nombre:"BERNARDITA DEL CARM CONTRERAS RIQUELME", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.802.793-2", nombre:"ROSA DEL CARMEN RODRIGUEZ GUERRERO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"010.966.250-K", nombre:"LUCIA IRENE PARRA JARA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.186.555-8", nombre:"CECILIA DEL CARMEN RIVERA VERA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.232.676-6", nombre:"MARIELA ANDREA NAVARRO CORNEJO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.283.296-3", nombre:"MARIA INES GUERRERO MUÑOZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.351.937-1", nombre:"SANDRO GERARDO DIENA ARENAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.762.073-5", nombre:"GLADYS DE LAS M NAVARRO VIDAL", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.762.977-5", nombre:"CAMEN GLORIA SOTO NOVOA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.787.290-4", nombre:"OFELIA DE LAS MERCE CESPEDES NUÑEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.997.270-1", nombre:"PAOLA DE LAS MERCED RODRIGUEZ GUERRERO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"011.997.328-7", nombre:"MARIA LUZ DE LAS ME MADRID CERECEDA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"012.011.165-5", nombre:"PATRICIA EUGENIA ROMERO VALLEJOS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"012.358.656-5", nombre:"YANET DEL CARMEN MONTECINO HORMAZABAL", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"012.369.937-8", nombre:"ANDREA SOLEDAD CERECEDA CESPEDES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"012.959.321-0", nombre:"ROSA ESTER CLAVERIA BASTIAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.035.246-4", nombre:"MARIA ISABEL PARRA SILVA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.038.749-7", nombre:"ALEJANDRA BRAVO CASTRO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.204.425-2", nombre:"ALEJANDRA MIREYA LEYTON NAVARRO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.350.120-7", nombre:"GABRIELA ANDREA ABARCA BUSTAMANTE", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.351.364-7", nombre:"INGRID CAROLYN SOZA IBARRA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.573.053-K", nombre:"ALEX FABIAN GONZALEZ RODRIGUEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"013.938.162-9", nombre:"MANUEL ALEJANDRO TRONCOSO MUÑOZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.050.945-0", nombre:"MANUEL ALEJANDRO RAMIREZ VALDEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.268.168-4", nombre:"FRANCISCO JERONIMO BUSTOS GARAY", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.295.747-7", nombre:"YOVANA DEL CARMEN NAVARRO SALAZAR", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.326.353-3", nombre:"DANIEL ALBERTO CORREA VELIZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.396.426-4", nombre:"ROSA PATRICIA GONZALEZ MONTES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.471.094-0", nombre:"EDUARDO ENRIQUE MARCHANT CASTRO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"014.609.746-4", nombre:"LIUBOV IVANOVNA LIUBIENKO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.118.501-0", nombre:"MARIA TERESA MARQUEZ GARRIDO", cargo:"COORDINADOR DE BODEGA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.129.521-5", nombre:"PAULA ELENA MARCHANT URREA", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.132.178-K", nombre:"ROSA MAGDALENA HERNANDEZ ARENAS", cargo:"JEFE DE TURNO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.132.320-0", nombre:"MIRIAM CAROLINA DIAZ DIAZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.132.640-4", nombre:"VALERIA TRINIDAD MEDINA GUERRERO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.138.681-4", nombre:"EUGENIA ELIANA AMARO SEPULVEDA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.226.219-1", nombre:"GERTUDIS JACQUELINE MORALES CAMPOS", cargo:"JEFE DE LINEA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.441.467-3", nombre:"IVON MARCELA BRAVO MORALES", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.521.264-0", nombre:"CARLOS HERNAN CALLEJAS CORTES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.631.615-6", nombre:"LUIS ANDRES PEREIRA MELLA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"015.971.516-7", nombre:"CAROLINA JOHANNA ESCOBAR ORELLANA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.003.242-1", nombre:"NATALIA ESTER CAMPOS PAIVA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.134.924-0", nombre:"JOCELYN VANESSA VALDERRAMA DIAZ", cargo:"SUPERVISOR ALTILLO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.157.983-1", nombre:"MARIA JOSE LABBE CONTRERAS", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.245.505-2", nombre:"SIMON ABRAHAM IRIBARREN DIAZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.273.806-2", nombre:"VICTOR ORLANDO MEDEL VASQUEZ", cargo:"ENCARGADO CUADRATURA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.335.094-7", nombre:"HECTOR EDUARDO ARANGUIZ MUÑOZ", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.393.642-9", nombre:"PATRICIA PAULINA GUZMAN GUZMAN", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.467.577-7", nombre:"PAULA ISABEL SAAVEDRA SAAVEDRA", cargo:"SUPERVISOR ALTILLO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.468.461-K", nombre:"AYLEEN NEDELKA CORTÉS KIRINGUIN", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.481.166-2", nombre:"NADIE VALESKA LEON VELIZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.481.321-5", nombre:"ISRAEL ANDRES NEGRETE VIDAL", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.555.658-5", nombre:"MARIELA ISABEL ARAVENA ARAVENA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.556.300-K", nombre:"CRISTINA STEFANI VARGAS VARGAS", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.826.229-9", nombre:"EVELIN MARLENE SALINAS NAVARRO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.826.691-K", nombre:"DANIELA ALEJANDRA CACERES POBLETE", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"016.861.157-9", nombre:"JULIO CESAR OJEDA PEREZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.172.679-4", nombre:"YOSELYN VALESKA DIAZ HERRERA", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.362.564-2", nombre:"CAMILA LISSETTE TELLO MUNDACA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.442.657-0", nombre:"CRISTOBAL ENRIQUE MEDINA NARANJO", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.562.176-8", nombre:"ISMAEL LIZARDO ARENAS CORNEJO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.820.337-1", nombre:"JORDAN ALFREDO MADARIAGA OPAZO", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.873.351-6", nombre:"ESTEFANIA ALEXANDRA RUZ VARGAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.882.622-0", nombre:"PRISCILA ADRIANA ORTEGA MARTÍNEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.883.213-1", nombre:"LIXIE GALAZ ACUÑA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.895.524-1", nombre:"FERNANDA ISAMAR VALENZUELA RIVEROS", cargo:"TARJADOR EXPORTACION", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"017.984.617-9", nombre:"MARÍA JOSÉ ITURRIAGA DURAN", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.061.885-6", nombre:"ERWIN JOHN PRIETO GALLARDO", cargo:"JEFE GESTIÓN OPERACIÓN LINEA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.252.912-5", nombre:"MADELEIN IVETTE NAVARRO VILLAGRAN", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.253.219-3", nombre:"MAURICIO DAMIAN DIAZ PENALOZA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.253.392-0", nombre:"DIEGO ESTEBAN NAVARRO NAVARRO", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.266.016-7", nombre:"CAMILO ALEJANDRO MUÑOZ CERECEDA", cargo:"GESTOR SORTER Y PALETIZADORES", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.306.612-9", nombre:"MARIA JOSEEVNA RAMIREZ LIUBENKO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.588.309-4", nombre:"CRISTIAN FELIPE VIDAL FLORES", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.594.790-4", nombre:"NICOLAS DAMIAN OTERO MARIN", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.650.364-3", nombre:"FERNANDO ANDRES CANALES HERRERA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.678.621-1", nombre:"FRANCISCA ALEJANDRA MUÑOZ GONZÁLEZ", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.678.671-8", nombre:"CLAUDIO IGNACIO ANT MORAGA MIRANDA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.683.230-2", nombre:"JAVIER IGNACIO NAVARRO BARAHONA", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.694.761-4", nombre:"VERONICA DEL CARMEN ZAPATA ZAPATA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.741.301-K", nombre:"CAMILA ANDREA CORVALAN SOTO", cargo:"TARJADOR COMERCIAL", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"018.884.705-6", nombre:"NATACHA NINOSKA DONOSO MORALES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.006.839-0", nombre:"CAMILA JESUS REYES JORQUERA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.007.343-2", nombre:"MARIA ALEJANDRA VERGARA GAJARDO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.007.848-5", nombre:"CATALINA ANDREA BARRIENTOS VARGAS", cargo:"JEFE PLANIFICACIÓN &CUADRATURA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.129.128-K", nombre:"RICHARD ESTEBAN ALBORNOZ GONZALES", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.129.289-8", nombre:"LUCIANA DEL CARMEN FERNANDEZ PONCE", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.129.319-3", nombre:"ALFREDO SEBASTIAN ORTIZ LLANTEN", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.299.417-9", nombre:"VICTOR PABLO ALCAINO GARRIDO", cargo:"ENCARGADO DE APERTURA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.357.744-K", nombre:"MARCELO ALEJANDRO BARRIENTOS REYES", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.386.368-K", nombre:"MABELL EUGENIA INZUNZA DIAZ", cargo:"TARJADOR EXPORTACION", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.446.274-3", nombre:"SAVKA LIDIA CAROLINA MUÑOZ ESPINOZA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.446.798-2", nombre:"MARIA FERNANDA ALDANA CESPEDES", cargo:"ADMINISTRATIVO PACKING 1", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.587.797-1", nombre:"YERSON ALBERTO OROSTEGUI CASTRO", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.587.945-1", nombre:"YOSELIN DEL CARMEN CORREA NAVARRO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.588.003-4", nombre:"FELIPE IGNACIO MORAGA QUEZADA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.588.091-3", nombre:"PATRICIA CECILIA ANTUNEZ GARRIDO", cargo:"ENCARGADO DE APERTURA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.610.830-0", nombre:"DIEGO ENRIQUE PUEBLA CESPEDES", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.718.291-1", nombre:"JORDAN ANDRES ALCAINO GARRIDO", cargo:"ENCARGADO DE APERTURA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.718.671-2", nombre:"MARCELA PAZ SANTIBAÑEZ SALINAS", cargo:"SUPERVISOR DE EMBALAJE", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.931.374-6", nombre:"MANUEL CESAR OLIVARES ROJAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"019.999.322-4", nombre:"GUILLERMO ANTONIO MENDEZ CORREA", cargo:"OPERADOR DE LINEA PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.035.341-2", nombre:"SERGIO RENE ARANDA ARANGUIZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.109.139-k", nombre:"IVAN NICOLÁS RIQUELME GONZÁLEZ", cargo:"PLANIFICACION DE LA PRODUCCION", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.196.252-8", nombre:"MARIA IGNACIA PEREZ SANDOVAL", cargo:"TARJADOR COMERCIAL", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.268.932-9", nombre:"VALENTINA FERNANDA BURGOS CORNEJO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.376.367-0", nombre:"CLAUDIO ANDRES PARDO MUÑOZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.413.819-2", nombre:"FERNANDO PATRICIO LÓPEZ AGUILERA", cargo:"OPERADOR DE SORTER", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.604.551-5", nombre:"JANIS CAMILA MUÑOZ ARRIAGADA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.662.893-6", nombre:"FERNANDO ANTONIO BRAVO LIZANA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.662.977-0", nombre:"ISABEL CRISTINA DONOSO MORALES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.722.132-5", nombre:"VALENTINA SELENE BRIONES CAAMAÑO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.757.065-6", nombre:"VERONICA ESTEFANIA NUÑEZ CIFUENTES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.767.144-4", nombre:"FABIAN ALEXANDER CASTRO CASTRO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"020.990.633-3", nombre:"MARIA EMILIA GOMEZ MARQUEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.035.163-9", nombre:"BENJAMIN ALEJANDRO DURAN GONZALEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.035.277-5", nombre:"CRISTOPHER ALEX SANDOVAL LOPEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.045.806-9", nombre:"LUIS MANUEL DIAZ HEVIA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.166.998-5", nombre:"MARIA PAZ VERGARA CESPEDES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.199.185-2", nombre:"MARTIN ALONSO RIQUELME GONZALEZ", cargo:"GESTOR CALIBRADORA ELECTRÓNICA", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.205.621-9", nombre:"ESPERANZA DEL ROSAR PINO PEÑALOZA", cargo:"TARJADOR EXPORTACION", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.488.719-3", nombre:"LUIS ALEJANDRO CISTERNA FUENZALIDA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.488.733-9", nombre:"ANA MARIA CANCINO FUENTES", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.488.741-K", nombre:"YESSENIA ANAIS VARGAS NUÑEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.492.219-3", nombre:"VADIM YAXALEM AEDO CONTRERAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.532.198-3", nombre:"RICARDO ALEJANDRO NAVARRETE TOLEDO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.607.553-6", nombre:"JULIANA OKSANA ARRIAGADA RAMIREZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.705.801-5", nombre:"MARTIN ALEXIS ESPINA ESPINA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.791.950-9", nombre:"VICTOR ELIAS ARAYA ARAVENA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.844.375-3", nombre:"MATIAS GUSTAVO CAMPOS VERA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"021.880.324-5", nombre:"DAVID PATRICIO ARAYA CUEVAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"022.305.534-6", nombre:"LUIS ANDRES CABELLO AGUILUZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"022.325.468-3", nombre:"BENJAMIN ERNESTO MUÑOZ RIVEROS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"022.484.226-0", nombre:"VICENTE JAVIER TORRES DEL CAMPO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"022.498.718-8", nombre:"ALONSO EDUARDO BURGOS CORNEJO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"022.592.042-7", nombre:"FELIPE SERGIO ALBER ORELLANA ROJAS", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"022.612.988-K", nombre:"SKARLET ALEJANDRA PALMA VALENZUELA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"026.345.113-9", nombre:"DAYLIN SOCARRAS DELGADO", cargo:"COORD. ABAST. Y CONTROL MAT.", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"026.389.796-K", nombre:"STEPHANIE DUPUY X", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"026.493.891-0", nombre:"DALILA JOSEFINA RODRIGUEZ CERMEÑO", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"026.947.757-1", nombre:"ANTHONY JOSE MACHADO GUTIERREZ", cargo:"OPERADOR DE SORTER", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"027.081.591-K", nombre:"LEWYN DAEL ZURITA GIL", cargo:"PALETIZADOR AUTOMATICO", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"027.157.080-5", nombre:"ESTHEFANY MARGARITA MARQUEZ MARTINEZ", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+            {rut:"028.962.741-3", nombre:"AILIN LARA BARZAGA", cargo:"OPERARIO PACKING", area:"OPERACIONES", sector:"PACKING"},
+
+            // OPERACIONES - RECEPCIÓN
+            {rut:"012.370.290-5", nombre:"JUAN ENRIQUE NAVARRO SANCHEZ", cargo:"ENCARGADO DE ENVASES", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"012.780.215-7", nombre:"JAIME HERNAN MUÑOZ ORTIZ", cargo:"JEFE DE RECEPCIÓN MP", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"014.014.966-7", nombre:"CARMEN GLORIA GUAJARDO BENITEZ", cargo:"CAMARERO", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"016.589.503-7", nombre:"CARLOS IVAN LIZANA ALLENDE", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"017.873.574-8", nombre:"KAREN ELIZABETH GONZALEZ MORALES", cargo:"ENCARGADO DE TURNO", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"017.980.737-8", nombre:"EDUARDO ALEXIS HILA VALDES VALDES", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"018.560.986-3", nombre:"CRISTOBAL MARCELO SOLIS VALENZUELA", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"018.561.018-7", nombre:"JUAN CARLOS CRUZ LOPEZ", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"018.561.051-9", nombre:"MARIA PAZ CORDOVA CORDOVA", cargo:"COORDINADOR DE RECEPCIÓN MP", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"018.806.604-6", nombre:"CLAUDIO HERNAN CASTRO CASTRO", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"019.250.095-8", nombre:"SERGIO ESTEBAN GAVILAN MORALES", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"019.552.835-7", nombre:"EXEQUIEL IGNACIO SANTANA NEGUIMAN", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"019.997.932-9", nombre:"MAJORIE ARACELY YAÑEZ CASTRO", cargo:"SUPERVISOR DE ROMANA", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"020.269.186-2", nombre:"FRANCISCA ALEJANDRA FIGUEROA FAUNDEZ", cargo:"OPERARIO RECEPCION", area:"OPERACIONES", sector:"RECEPCIÓN"},
+            {rut:"020.757.196-2", nombre:"CAROLINA ANDREA GALAZ MENCHACA", cargo:"DIGITADOR", area:"OPERACIONES", sector:"RECEPCIÓN"},
+
+            // OPERACIONES - MANTENCIÓN
+            {rut:"015.131.632-8", nombre:"LEANDRO PATRICIO VILLAVICENCIO VALDERRAMA", cargo:"MECANICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"015.946.852-6", nombre:"JORGE LUIS NUÑEZ GAVILAN", cargo:"MECANICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"016.858.343-5", nombre:"LUIS HUMBERTO GUAJARDO HERRERA", cargo:"MECANICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"016.899.355-2", nombre:"DIEGO ALEJANDRO GONZALEZ PUEBLA", cargo:"MECANICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"017.443.803-K", nombre:"DIEGO FELIPE ALVAREZ DIAZ", cargo:"ELECTRICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"017.795.310-5", nombre:"EMANUEL ABRAHAM NAVARRO FUENZALIDA", cargo:"JEFE DE MANTENCIÓN", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"018.306.613-7", nombre:"DMITRI JOSEEVICH RAMIREZ LIUBENKO", cargo:"ELECTRICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"018.682.277-3", nombre:"ALEJANDRO DENIN ALVAREZ TELLO", cargo:"MECANICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"019.006.903-6", nombre:"JUAN JESUS MONSALVE GONZALEZ", cargo:"ENCARGADO DE PROYECTOS", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"019.718.369-1", nombre:"NICOLAS ALEJANDRO DÍAZ GONZALEZ", cargo:"MECANICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"020.389.531-3", nombre:"JAVIER IGNACIO FUENTES RUBIO", cargo:"AYUDANTE MECANICO", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"020.414.003-0", nombre:"BASTIAN ALBERTO MOYA CONTRERAS", cargo:"ELECTRICO 1", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"021.145.224-2", nombre:"FABIAN ROBERTO TAPIA ZAPATA", cargo:"AYUDANTE ELECTRICO", area:"OPERACIONES", sector:"MANTENCIÓN"},
+            {rut:"021.481.815-9", nombre:"JESUS ENRIQUE VALENZUELA ROMERO", cargo:"AYUDANTE MECANICO", area:"OPERACIONES", sector:"MANTENCIÓN"},
+
+           
+           // --- OPERACIONES: FRIGORIFICO ---
+            {rut:"013.345.322-9", nombre:"JUAN ALBERTO GALVEZ BASTIAS", cargo:"JEFE DE TURNO FRIGORIFICO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"013.783.683-1", nombre:"ROBERTO SEGUNDO OYARCE SOTO", cargo:"ASISTENTE DE ALMACENAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"014.904.422-1", nombre:"CARLOS ALBERTO CASTRO MONDACA", cargo:"ENCARGADO DE PREFRIO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"015.131.633-6", nombre:"JAVIER HERNAN VARGAS CERON", cargo:"OPERADOR DE GRUA B", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"015.988.788-K", nombre:"TABITA MAVET CATRICURA RODRIGUEZ", cargo:"COORD. AUDITORIAS Y SISTEMAS", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"016.870.600-6", nombre:"MICCIO CHRISTIAN ESPINOZA ESPINOZA", cargo:"ENCARGADO REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.131.379-1", nombre:"SAMUEL ANTONIO VALDERRAMA RETAMAL", cargo:"JEFE DE TURNO FRIGORIFICO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.156.011-K", nombre:"MATIAS NICOLAS BRAVO GODOY", cargo:"OPERARIO PREFRIO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.192.882-6", nombre:"RAFAEL ALEJANDRO BAEZA DAMKE", cargo:"ENCARGADO DE ALMACENAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.400.093-K", nombre:"HERMAN PATRICIO CARRILLO ESPINOZA", cargo:"OPERADOR DE GRUA B", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.441.608-7", nombre:"ALEJANDRO ANDRES HESS MADARIAGA", cargo:"SUPERVISOR DE PREFRIO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.739.806-3", nombre:"DANIEL ANDRES HUENTREPAN ARAYA", cargo:"ENCARGADO DESPACHO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"017.925.610-K", nombre:"CARLOS ANDRES OLIVARES CARRASCO", cargo:"ASISTENTE DE ALMACENAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"018.280.370-7", nombre:"SERGIO ANTONIO VERGARA VERGARA", cargo:"ENCARGADO DESPACHO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"018.544.000-1", nombre:"NICOLAS ANTONIO CONTRERAS HERRERA", cargo:"ENCARGADO REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"018.683.075-K", nombre:"JUAN MANUEL VALENZUELA MAUREIRA", cargo:"ASISTENTE DE REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"018.806.753-0", nombre:"IGNACIO ALEJANDRO VIDAL FERNANDEZ", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"018.884.707-2", nombre:"DANIEL ADELMO PICHUN VELASQUEZ", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"018.884.820-6", nombre:"LORETO BELEN DIAZ MUÑOZ", cargo:"ANALISTA REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"019.007.519-2", nombre:"RICHARDS ALEXANDER LABBE DÍAZ", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"019.298.821-7", nombre:"ENZO VICENTE FAUNDEZ CONTRERAS", cargo:"ENCARGADO REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"019.588.087-5", nombre:"MIGUEL FRANCISCO ORELLANA LEVENGUE", cargo:"TARJADOR REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"019.794.801-9", nombre:"VALENTINA IGNACIA NAVARRO HERRERA", cargo:"ENCARGADO DESPACHO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"019.881.545-4", nombre:"RODRIGO ANDRES OSSA DIAZ", cargo:"ASISTENTE DE REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"019.961.019-8", nombre:"ALEX RODRIGO JESUS AEDO GAETE", cargo:"ENCARGADO REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"020.025.496-1", nombre:"NESTOR ANSELMO MARIN MUENA", cargo:"ASISTENTE DE REPALETIZAJE", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"020.413.777-3", nombre:"JONNATHAN ANTONIO MUÑOZ GOMEZ", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"020.767.183-5", nombre:"JOSE IGNACIO BAHAMONDES BUSTOS", cargo:"ENCARGADO DESPACHO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"020.953.075-9", nombre:"VICENTE FERNANDO AN PARRAGUEZ ARCE", cargo:"ENCARGADO DESPACHO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"021.832.329-4", nombre:"ANTONIA ESPERANZA LETELIER GONZALEZ", cargo:"ASISTENTE DE PREFRIO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"021.833.071-1", nombre:"ABRIL SAN MARTIN GALLEGOS", cargo:"ASISTENTE DE PREFRIO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"022.145.059-0", nombre:"BENJAMIN ALEJANDRO PAVEZ GÓMEZ", cargo:"OPERADOR DE GRUA C", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"026.982.713-0", nombre:"YEISON JOSE VILLARROEL URBANO", cargo:"ENCARGADO DESPACHO", area:"OPERACIONES", sector:"FRIGORIFICO"},
+            {rut:"13126260-4", nombre:"DANIEL MADRID CERECEDA", cargo:"JEFE DE OPERACIONES", area:"OPERACIONES", sector:"FRIGORIFICO"},
+
+            // ASEGURAMIENTO DE CALIDAD
+            // --- ASEGURAMIENTO DE CALIDAD ---
+            {rut:"014.255.630-8", nombre:"LEOPOLDO ANTONIO ZAMORANO GONZALEZ", cargo:"COORDINADOR CALIDAD RECEPCION", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"015.131.623-9", nombre:"KAREN ANDREA LEAL GONZALEZ", cargo:"ENCARGADO DE TURNO CALIDAD", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"016.289.931-7", nombre:"MASSIEL ARIAS VASQUEZ", cargo:"CONTROL DE CALIDAD RECEPCIÓN", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"016.337.280-0", nombre:"ARMANDO ANDRES AHUMADA BRAVO", cargo:"COORD.CALIDAD TURNO PACKING", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"016.860.121-2", nombre:"PAMELA ANDREA CORNEJO CHAVEZ", cargo:"COORDINADOR CALIDAD RECEPCION", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"017.509.225-0", nombre:"MASIEL DEL CARMEN IBAÑEZ DUARTE", cargo:"ASISTENTE ADMINISTRATIVO", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"017.526.943-6", nombre:"MACK ALEXIS MARTINEZ ARAYA", cargo:"COORDINADOR DE TURNO CALIDAD", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"017.794.805-5", nombre:"CATALINA DEL PILAR GUAJARDO CONCHA", cargo:"CONTROL DE CALIDAD PACKING", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"018.252.832-3", nombre:"PEDRO SEBASTIAN ESPINA REYES", cargo:"CONTROL TEMPERATURA", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"018.595.221-5", nombre:"MARCELA PAZ ORTIZ GONZALEZ", cargo:"APLICADOR DE QUIMICOS", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"018.722.401-2", nombre:"FRANCISCA SAB CASTRO BARAHONA", cargo:"CONTROL CALIDAD SELECTOR", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"018.807.001-9", nombre:"MARIO NICOLAS MATAMALA VALDES", cargo:"ASIST.SERVICE DESK/SOPORTE TI", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"019.129.208-1", nombre:"FRANCISCA ALEJANDRA CORNEJO MUÑOZ", cargo:"SUPERVISOR CALIDAD", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"019.587.787-4", nombre:"IGNACIO ANTONIO MARTINEZ ARAYA", cargo:"CONTROL DE CALIDAD RECEPCIÓN", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"019.718.297-0", nombre:"JOSE IGNACIO CARO HUICHIMAN", cargo:"APLICADOR DE QUIMICOS", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"019.983.024-4", nombre:"MARCELA PAZ MORALES ARRIAGADA", cargo:"CONTROL DE CALIDAD PACKING", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"020.025.524-0", nombre:"ANGELA GUISLAINE GONZALEZ SOTO", cargo:"CONTROL CALIDAD SELECTOR", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"020.150.764-2", nombre:"NADINE ALESSANDRA BUSTAMANTE ACEVEDO", cargo:"CONTROL CALIDAD PROD.TERMINADO", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"020.270.265-1", nombre:"ROCÍO DEL PILAR REYES SANTELICES", cargo:"CONTROL CALIDAD PROD.TERMINADO", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"020.376.387-5", nombre:"LUIS ANTONIO AHUMADA NUÑEZ", cargo:"CONTROL CALIDAD T° Y DESPACHO", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"020.508.660-9", nombre:"CAMILA ESTEFANIA JIMENEZ TORRES", cargo:"CONTROL DE CALIDAD RECEPCIÓN", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"020.767.080-4", nombre:"JUAN PABLO GONZALEZ ARAYA", cargo:"CONTROL DE CALIDAD RECEPCIÓN", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"021.438.526-0", nombre:"BELEN CATALINA PARRA VIVAR", cargo:"CONTROL CALIDAD PROD.TERMINADO", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"021.855.916-6", nombre:"IGNACIO ALFREDO MAUREIRA PEREZ", cargo:"CONTROL CALIDAD SELECTOR", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"022.479.707-9", nombre:"PAZ ANTONIA MUÑOZ GALLARDO", cargo:"CONTROL DE CALIDAD PACKING", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"022.520.361-k", nombre:"ISIDORA PAZ LOYOLA GARCIA", cargo:"CONTROL DE CALIDAD PACKING", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            {rut:"15946109-2", nombre:"ELIZABETH ESPINA AGUILERA", cargo:"JEFE DE ASEGURAMIENTO DE CALIDAD", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
+            
+            
+            // --- GERENCIA TECNICA: DPTO. AGRONOMICO ---
+            {rut:"011.370.601-5", nombre:"ANDREA PAOLA YAÑEZ CAMPOS", cargo:"AGRONOMO TERRENO TEMP.CEREZA", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"016.373.029-4", nombre:"JONATHAN RENE MUÑOZ ESPINOZA", cargo:"AGRONOMO TERRENO TEMP.CEREZA", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"019.610.554-9", nombre:"JOSE VICENTE MENDEZ LOPEZ", cargo:"AGRONOMO TERRENO TEMP.CEREZA", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"019.818.625-2", nombre:"JAVIER SEBASTIAN BRIONES CAAMAÑO", cargo:"AGRONOMO TERRENO TEMP.CEREZA", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"019.927.534-8", nombre:"CATALINA DEL PILAR VALENZUELA GONZALEZ", cargo:"AGRONOMO TERRENO TEMP.CEREZA", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"020.035.400-1", nombre:"CATALINA BELEN VASQUEZ SEPULVEDA", cargo:"AGRONOMO TEMP. ADMINISTRATIVO", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"020.481.698-0", nombre:"RICARDO ANTONIO GONZALEZ VERDUGO", cargo:"AGRONOMO TERRENO TEMP.CEREZA", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"13550975-2", nombre:"JUAN SILVA MAIRA", cargo:"AGRONOMO TERRENO", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"15144421-0", nombre:"LUIS BARRIENTOS BARRIENTOS", cargo:"AGRONOMO", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            {rut:"18254057-9", nombre:"DIEGO HORMAZABAL SILVA", cargo:"AGRONOMO TERRENO", area:"GERENCIA TECNICA", sector:"DPTO.AGRONOMICO"},
+            // ADMINISTRACIÓN Y FINANZAS
+            {rut:"011.069.717-1", nombre:"MARIA ELENA ARENAS ORTIZ", cargo:"ENCARGADA ASEO", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"014.051.591-4", nombre:"JEZABEL TAMARA ORTEGA CRUCES", cargo:"ENCARGADA DE TESORERIA", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"016.119.277-5", nombre:"NORA JAZMIN SILVA OBANDO", cargo:"ASISTENTE ADMINIST. Y FINANZAS", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"016.802.552-1", nombre:"MARYORIE ALEJANDRA ROJAS URRA", cargo:"ASISTENTE REMUNERACIONES", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"016.858.625-6", nombre:"RICARDO ALEXIS ARRIAGADA QUEZADA", cargo:"ASIST.SERVICE DESK/SOPORTE TI", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"017.795.964-2", nombre:"JESUS ABRAHAM GARCIA DE LA FUENTE", cargo:"ASIST.SERVICE DESK/SOPORTE TI", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"017.823.377-7", nombre:"CRISTIAN FABIAN HUERTA ESPINOZA", cargo:"ASISTENTE REMUNERACIONES", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"017.980.747-5", nombre:"RAUL ELVIS CARREÑO JARA", cargo:"ANALISTA DE SISTEMA Y DBA", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"018.252.848-K", nombre:"CONSTANZA CATALINA ESPINOSA PALACIOS", cargo:"ANALISTA CONTABLE", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"018.252.917-6", nombre:"KATHERINE ROSA GUTIERREZ MUÑOZ", cargo:"ASISTENTE CONTABLE", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"018.681.458-4", nombre:"CATALINA ANATOLIA REYES REYES", cargo:"ASISTENTE REMUNERACIONES", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"019.007.356-4", nombre:"ENGEMBERG ALEXANDER ARAYA MASBERNAT", cargo:"ANALISTA INFRAESTRUCTURA Y COM", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"019.298.869-1", nombre:"SOFIA ALEJANDRA CABELLO VIDAL", cargo:"ASISTENTE CONTABLE", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"019.519.509-9", nombre:"LEONARDO JAVIER VILLARROEL VERGARA", cargo:"ASISTENTE ADMINIST. Y FINANZAS", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"020.176.970-1", nombre:"MARJORIE SOLEDAD GOMEZ SOTO", cargo:"ASISTENTE ADMINISTRATIVO", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"021.457.303-2", nombre:"JOSEFA MARGARITA SOLORZA SAN MARTIN", cargo:"AYUDANTE REMUNERACIONES", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"021.488.975-7", nombre:"VICENTE JOAQUIN CORNEJO FARIAS", cargo:"ASIST.SERVICE DESK/SOPORTE TI", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"10985473-5", nombre:"JORGE MARDONES ARIAS", cargo:"JEFE DE TI", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"15132317-0", nombre:"PATRICIA ELIAS RAMIREZ", cargo:"JEFE DE REMUNERACIONES", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+            {rut:"18967035-4", nombre:"JOSE AYALA ROJAS", cargo:"ENCARGADO DE CONTABILIDAD", area:"ADMINISTRACIÓN Y FINANZAS", sector:"ADMINISTRACION GENERAL"},
+
+            // COMEX
+            {rut:"012.161.594-0", nombre:"ELIZABETH JOHANNA SOLIS MONTERO", cargo:"COORDINADORA DOCUMENTAL", area:"COMEX", sector:"COMEX"},
+            {rut:"018.956.388-4", nombre:"NICOLAS FABIAN VELOZO FARIAS", cargo:"ASISTENTE COMEX", area:"COMEX", sector:"COMEX"},
+            {rut:"020.268.537-4", nombre:"ENRIQUE JOSE ARAYA VERGARA", cargo:"ASISTENTE COMEX", area:"COMEX", sector:"COMEX"},
+            {rut:"13352291-3", nombre:"GLEN SANCHEZ CERECEDA", cargo:"JEFE DE LOGISTICA", area:"COMEX", sector:"COMEX"}
         ];
 
-        const PERSONAL_DB = [
-            // ADM & FINANZAS
-            { nombre: "JOSE ENRIQUE GUERRERO REYES", area: "Adm. y Finanzas", rut: "007.327.405-2" },
-            { nombre: "LUIS ARMANDO MUÑOZ GUERRERO", area: "Adm. y Finanzas", rut: "007.855.334-0" },
-            { nombre: "PEDRO PABLO CAMPOS CONCHA", area: "Adm. y Finanzas", rut: "010.142.169-4" },
-            { nombre: "JUAN CARLOS CORDOVA ZAMORANO", area: "Adm. y Finanzas", rut: "012.782.679-K" },
-            { nombre: "HERNAN ALEJANDRO GUERRERO GUERRERO", area: "Adm. y Finanzas", rut: "014.051.289-3" },
-            { nombre: "MARYORIE ALEJANDRA ROJAS URRA", area: "Adm. y Finanzas", rut: "016.802.552-1" },
-            { nombre: "RICARDO ALEXIS ARRIAGADA QUEZADA", area: "Adm. y Finanzas", rut: "016.858.625-6" },
-            { nombre: "RODOLFO ANTONIO GOMEZ HERNANDEZ", area: "Adm. y Finanzas", rut: "018.681.549-1" },
-            // RRHH
-            { nombre: "LORETO CRISTINA ALIAGA ORTEGA", area: "RRHH", rut: "015.630.480-8" },
-            { nombre: "JESUS ABRAHAM GARCIA DE LA FUENTE", area: "RRHH", rut: "017.795.964-2" },
-            // OPERACIONES
-            { nombre: "CARMEN GLORIA GUAJARDO BENITEZ", area: "Operaciones", rut: "014.014.966-7" },
-            { nombre: "KAREN ELIZABETH GONZALEZ MORALES", area: "Operaciones", rut: "017.873.574-8" },
-            { nombre: "EDUARDO ALEXIS HILA VALDES", area: "Operaciones", rut: "017.980.737-8" },
-            { nombre: "CRISTOBAL MARCELO SOLIS VALENZUELA", area: "Operaciones", rut: "018.560.986-3" },
-            { nombre: "JUAN CARLOS CRUZ LOPEZ", area: "Operaciones", rut: "018.561.018-7" },
-            { nombre: "CLAUDIO HERNAN CASTRO CASTRO", area: "Operaciones", rut: "018.806.604-6" },
-            { nombre: "SERGIO ESTEBAN GAVILAN MORALES", area: "Operaciones", rut: "019.250.095-8" },
-            { nombre: "EXEQUIEL IGNACIO SANTANA", area: "Operaciones", rut: "019.552.835-7" },
-            { nombre: "GLORIA CAROLINA MORAGA SEPULVEDA", area: "Operaciones", rut: "009.738.046-5" },
-            { nombre: "EDUARDO ENRIQUE MUÑOZ SOTO", area: "Operaciones", rut: "009.743.891-9" },
-            { nombre: "AILIN LARA BARZAGA", area: "Operaciones", rut: "028.962.741-3" },
-            { nombre: "ESTHEFANY MARGARITA MARQUEZ MARTINEZ", area: "Operaciones", rut: "027.157.080-5" },
-            { nombre: "LEWYN DAEL ZURITA GIL", area: "Operaciones", rut: "027.081.591-K" },
-            { nombre: "ANTHONY JOSE MACHADO GUTIERREZ", area: "Operaciones", rut: "026.947.757-1" },
-            { nombre: "RODRIGO ALEJANDRO ASTUDILLO CORTES", area: "Operaciones", rut: "010.203.356-6" },
-            // TÉCNICA Y CALIDAD (Jefaturas cruzadas)
-            { nombre: "Diego Hormazabal", area: "Gerencia Técnica", rut: "" },
-            { nombre: "Leonardo Zamora", area: "Gerencia Técnica", rut: "" },
-            { nombre: "Luis Barrientos", area: "Gerencia Técnica", rut: "" },
-            { nombre: "Heimy Fuenzalida", area: "Aseguramiento de Calidad", rut: "" },
-            { nombre: "Masiel Ibañez", area: "Aseguramiento de Calidad", rut: "" }
+        const GERENTES = [
+            { nombre: "CARLA FERNANDEZ", area: "GDO", cargo: "GERENTE DESARROLLO ORGANIZACIONAL" },
+            { nombre: "FRANCISCO CARRASCO", area: "OPERACIONES", cargo: "GERENTE DE OPERACIONES" },
+            { nombre: "GERMAN SAMANIEGO", area: "GERENCIA GENERAL", cargo: "GERENTE GENERAL" },
+            { nombre: "GIANINNA SALAZAR", area: "ASEGURAMIENTO DE CALIDAD", cargo: "GERENTE DE ASEGURAMIENTO DE CALIDAD" },
+            { nombre: "JERONIMO CONCHA", area: "GERENCIA TECNICA", cargo: "GERENTE DPTO TECNICO AGRONOMICO" },
+            { nombre: "ROBINSON FUENTES", area: "ADMINISTRACIÓN Y FINANZAS", cargo: "GERENTE DE ADMINISTRACIÓN Y FINANZAS" },
+            { nombre: "VALENTINA MUÑOZ", area: "COMEX", cargo: "GERENTE DE COMEX" }
         ];
 
+        // --- 3. UTILIDADES ---
+        const formatearRut = (rutRaw) => {
+            if (!rutRaw) return "";
+            let valor = rutRaw.replace(/\./g, "").replace(/-/g, "").toUpperCase();
+            if (valor.length < 2) return valor;
+            valor = valor.replace(/^0+/, ""); // Quita ceros iniciales visualmente
+            let cuerpo = valor.slice(0, -1);
+            let dv = valor.slice(-1);
+            return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
+        };
+
+        const rutParaNombreArchivo = (rutRaw) => {
+            if (!rutRaw) return "";
+            let limpio = rutRaw.replace(/\./g, "").replace(/-/g, "").replace(/^0+/, "");
+            if (limpio.length < 2) return limpio;
+            let cuerpo = limpio.slice(0, -1);
+            let dv = limpio.slice(-1);
+            let cuerpoConPuntos = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+            // Retorna formato X.XXX.XXX-X (coincide con archivos)
+            return `${cuerpoConPuntos}-${dv}`;
+        };
+
+        // --- 4. COMPONENTE APP ---
         const App = () => {
-            const [evaluadorJson, setEvaluadorJson] = useState(""); 
-            const [areaObjetivo, setAreaObjetivo] = useState("");
-            const [evaluadoObj, setEvaluadoObj] = useState(null); 
-            const [scores, setScores] = useState({ rendimiento: null, compromiso: null, frustracion: null, responsabilidad: null });
+            const [evaluador, setEvaluador] = useState(null);
+            const [targetGerencia, setTargetGerencia] = useState("");
+            const [targetSector, setTargetSector] = useState("");
+            const [personalFiltrado, setPersonalFiltrado] = useState([]);
+            
+            const [evaluadoSeleccionado, setEvaluadoSeleccionado] = useState(null);
+            const [scores, setScores] = useState({ rendimiento: null, compromiso: null, responsabilidad: null });
             const [comentario, setComentario] = useState("");
-            const [history, setHistory] = useState([]);
             const [mensaje, setMensaje] = useState("");
-            const [errorGlobal, setErrorGlobal] = useState(initError);
             const [isSaving, setIsSaving] = useState(false);
-            const [isDownloading, setIsDownloading] = useState(false);
+            const [history, setHistory] = useState([]);
+            
+            // Estado para ignorados (Session)
+            const [ignorados, setIgnorados] = useState(new Set());
 
-            // Cargar historial en tiempo real (SIN user dependency, directo a BD)
             useEffect(() => {
                 if (firebaseReady && db) {
-                    const unsubscribe = db.collection("evaluaciones").orderBy("id", "desc").onSnapshot((s) => {
+                    db.collection("evaluaciones").orderBy("id", "desc").onSnapshot(s => {
                         setHistory(s.docs.map(d => d.data()));
-                        setErrorGlobal(null);
-                    }, (error) => {
-                        console.error("Error cargando historial:", error);
-                        if (error.code === 'permission-denied') {
-                            setErrorGlobal("Permiso denegado: Revisa Reglas (allow write: if true).");
-                        } else {
-                            setErrorGlobal("Error BD: " + error.message);
-                        }
                     });
-                    return () => unsubscribe();
                 }
             }, []);
 
-            // Filtros Inteligentes
-            const areasUnicas = useMemo(() => [...new Set(PERSONAL_DB.map(p => p.area))].sort(), []);
-            
-            const personalFiltrado = useMemo(() => {
-                if (!areaObjetivo) return [];
-                let lista = PERSONAL_DB.filter(p => p.area === areaObjetivo);
-                if (evaluadorJson) {
-                    try {
-                        const evaluadorObj = JSON.parse(evaluadorJson);
-                        lista = lista.filter(p => p.nombre.toLowerCase().trim() !== evaluadorObj.nombre.toLowerCase().trim());
-                        const yaEvaluados = new Set(
-                            history
-                                .filter(h => h.evaluador_nombre === evaluadorObj.nombre)
-                                .map(h => h.evaluado_nombre)
-                        );
-                        lista = lista.filter(p => !yaEvaluados.has(p.nombre));
-                    } catch(e) {}
-                }
-                return lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
-            }, [areaObjetivo, evaluadorJson, history]);
+            const gerenciasDisponibles = useMemo(() => {
+                if (!evaluador) return [];
+                const todasAreas = [...new Set(DB_MAESTRA.map(item => item.area))];
+                return todasAreas.filter(area => area !== evaluador.area).sort();
+            }, [evaluador]);
 
-            const handleScore = (key, val) => setScores(prev => ({ ...prev, [key]: parseInt(val) }));
-            const handleEvaluadoChange = (e) => {
+            const sectoresDisponibles = useMemo(() => {
+                if (!targetGerencia) return [];
+                return [...new Set(DB_MAESTRA.filter(item => item.area === targetGerencia).map(item => item.sector))].sort();
+            }, [targetGerencia]);
+
+            useEffect(() => {
+                if (targetGerencia && targetSector) {
+                    let listado = DB_MAESTRA.filter(p => p.area === targetGerencia && p.sector === targetSector);
+                    
+                    const yaEvaluados = new Set(
+                        history
+                            .filter(h => h.evaluador_nombre === evaluador.nombre)
+                            .map(h => h.evaluado_rut)
+                    );
+                    
+                    const listadoFinal = listado
+                        .map(p => ({...p, rut: formatearRut(p.rut)}))
+                        .filter(p => !yaEvaluados.has(p.rut) && !ignorados.has(p.rut))
+                        .sort((a,b) => a.nombre.localeCompare(b.nombre));
+
+                    setPersonalFiltrado(listadoFinal);
+                } else {
+                    setPersonalFiltrado([]);
+                }
+            }, [targetGerencia, targetSector, evaluador, history, ignorados]);
+
+            const handleEvaluadorChange = (e) => {
                 const nombre = e.target.value;
-                const persona = personalFiltrado.find(p => p.nombre === nombre);
-                setEvaluadoObj(persona || null);
+                const gerenteObj = GERENTES.find(g => g.nombre === nombre);
+                setEvaluador(gerenteObj);
+                setTargetGerencia("");
+                setTargetSector("");
+                setEvaluadoSeleccionado(null);
+                setIgnorados(new Set()); 
+            };
+
+            const handleCardClick = (persona) => {
+                setEvaluadoSeleccionado(persona);
+                setScores({ rendimiento: null, compromiso: null, responsabilidad: null });
+                setComentario("");
+            };
+
+            const handleImageError = (e) => {
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+            };
+
+            const ignorarColaborador = (rut) => {
+                const nuevosIgnorados = new Set(ignorados);
+                nuevosIgnorados.add(rut);
+                setIgnorados(nuevosIgnorados);
+            };
+
+            const exportarExcel = () => {
+                if(history.length === 0) {
+                    alert("No hay datos para exportar.");
+                    return;
+                }
+                const datosConfidenciales = history.map(row => {
+                    const { evaluador_nombre, evaluador_area, ...resto } = row; 
+                    return {
+                        ...resto,
+                        "ORIGEN": "CONFIDENCIAL" 
+                    };
+                });
+                const ws = XLSX.utils.json_to_sheet(datosConfidenciales);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Evaluaciones_Confidenciales");
+                XLSX.writeFile(wb, "Reporte_Evaluaciones_Anonimo.xlsx");
             };
 
             const guardarEvaluacion = async () => {
-                if (!evaluadorJson || !evaluadoObj || Object.values(scores).some(v => v === null)) {
-                    setMensaje("⚠️ Faltan campos."); 
-                    setTimeout(() => setMensaje(""), 3000); 
+                if (Object.values(scores).some(v => v === null)) {
+                    setMensaje("⚠️ Falta calificar algunos puntos.");
+                    setTimeout(() => setMensaje(""), 3000);
                     return;
                 }
-                
                 setIsSaving(true);
-                const evaluadorData = JSON.parse(evaluadorJson);
-                const promedio = Object.values(scores).reduce((a, b) => a + b, 0) / 4;
-
+                const promedio = Object.values(scores).reduce((a,b) => a+b, 0) / 3;
+                
                 const registro = {
                     id: Date.now(),
                     fecha: new Date().toLocaleDateString("es-CL"),
-                    evaluador_nombre: evaluadorData.nombre, 
-                    evaluador_cargo: evaluadorData.cargo,
-                    evaluador_area: evaluadorData.area,
-                    evaluado_nombre: evaluadoObj.nombre,
-                    evaluado_rut: evaluadoObj.rut || "S/I", 
-                    evaluado_area: areaObjetivo,
+                    evaluador_nombre: evaluador.nombre,
+                    evaluador_area: evaluador.area,
+                    evaluado_nombre: evaluadoSeleccionado.nombre,
+                    evaluado_rut: evaluadoSeleccionado.rut,
+                    evaluado_cargo: evaluadoSeleccionado.cargo,
+                    evaluado_area: targetGerencia,
+                    evaluado_sector: targetSector,
                     ...scores,
                     promedio: promedio.toFixed(2),
                     comentarios: comentario || "Sin comentarios"
@@ -216,243 +581,196 @@
 
                 if (firebaseReady && db) {
                     try {
-                        // SIN LOGIN ANÓNIMO
                         await db.collection("evaluaciones").add(registro);
-                        setMensaje("✅ Guardado exitosamente.");
-                        setErrorGlobal(null);
+                        setMensaje("✅ Guardado.");
+                        setEvaluadoSeleccionado(null);
                     } catch (e) {
-                        console.error(e);
-                        setMensaje("❌ Error crítico.");
-                        setErrorGlobal("Error al Guardar: " + e.message + " (" + e.code + ")");
-                        setHistory([registro, ...history]);
+                        setMensaje("❌ Error al guardar.");
                     }
                 } else {
                     setHistory([registro, ...history]);
-                    setMensaje("⚠️ Guardado Local (Offline).");
+                    setMensaje("⚠️ Guardado local.");
+                    setEvaluadoSeleccionado(null);
                 }
-                
-                setIsSaving(false); 
-                setEvaluadoObj(null); 
-                setScores({ rendimiento: null, compromiso: null, frustracion: null, responsabilidad: null }); 
-                setComentario("");
+                setIsSaving(false);
                 setTimeout(() => setMensaje(""), 3000);
             };
 
-            const exportarExcel = async () => {
-                setIsDownloading(true);
-                let datosRaw = [];
-                try {
-                    if (firebaseReady && db) {
-                        // SIN LOGIN ANÓNIMO
-                        const snapshot = await db.collection("evaluaciones").get();
-                        datosRaw = snapshot.docs.map(doc => doc.data());
-                    } else {
-                        datosRaw = history;
-                    }
-
-                    if (datosRaw.length === 0) {
-                        alert("No hay datos para exportar.");
-                        setIsDownloading(false);
-                        return;
-                    }
-
-                    const datosAnonimos = datosRaw.map(item => {
-                        const { evaluador_nombre, evaluador_cargo, evaluador_area, id, ...resto } = item;
-                        return { ...resto, "Origen": "BD", "Confidencial": "SI" };
-                    });
-
-                    const ws = XLSX.utils.json_to_sheet(datosAnonimos);
-                    const wb = XLSX.utils.book_new();
-                    XLSX.utils.book_append_sheet(wb, ws, "Evaluaciones");
-                    XLSX.writeFile(wb, "Evaluaciones_Confidenciales_Aurora.xlsx");
-                } catch (error) {
-                    alert("Error al exportar: " + error.message);
-                    setErrorGlobal("Error Excel: " + error.message);
-                }
-                setIsDownloading(false);
-            };
-
             const niveles = [
-                { val: 0, label: "Nulo", color: "bg-red-100 text-red-700 border-red-200" },
-                { val: 1, label: "Medio", color: "bg-orange-100 text-orange-700 border-orange-200" },
+                { val: 0, label: "Insuficiente", color: "bg-red-100 text-red-700 border-red-200" },
+                { val: 1, label: "Regular", color: "bg-orange-100 text-orange-700 border-orange-200" },
                 { val: 2, label: "Bueno", color: "bg-yellow-100 text-yellow-700 border-yellow-200" },
                 { val: 3, label: "Excelente", color: "bg-green-100 text-green-700 border-green-200" }
             ];
 
-            const getFotoUrl = (rut) => {
-                if (!rut) return null;
-                const cleanRut = rut.replace(/^0+/, ''); 
-                return `./fotos/${cleanRut}.jpg`;
-            };
-
             return (
-                <div className="max-w-6xl mx-auto p-4 md:p-8">
-                    {/* BARRA DE DIAGNÓSTICO DE ERRORES */}
-                    {errorGlobal && (
-                        <div className="mb-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-md relative" role="alert">
-                            <strong className="font-bold">Error de Sistema: </strong>
-                            <span className="block sm:inline">{errorGlobal}</span>
-                        </div>
-                    )}
-
-                    <header className="mb-8 flex flex-col md:flex-row justify-between items-center border-b pb-4 border-green-200 gap-4">
+                <div className="max-w-7xl mx-auto p-4 md:p-6 min-h-screen">
+                    <header className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-4 rounded-xl shadow-sm border border-gray-100 gap-4">
                         <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 bg-green-700 rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg">AA</div>
+                            <div className="bg-green-700 text-white w-12 h-12 flex items-center justify-center rounded-lg font-bold text-xl shadow-lg">AA</div>
                             <div>
-                                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Evaluación 360°</h1>
-                                <p className="text-green-700 font-semibold text-sm">Aurora Australis S.A.</p>
+                                <h1 className="text-2xl font-bold text-gray-800">Evaluación Gerencial 360°</h1>
+                                <p className="text-xs text-green-600 font-bold uppercase tracking-wide">Aurora Australis S.A.</p>
                             </div>
                         </div>
-                        <div className="text-right flex items-center gap-3">
-                             <div className={`text-xs px-3 py-1 rounded-full border font-bold flex items-center gap-2 ${firebaseReady && !errorGlobal ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                                <div className={`w-2 h-2 rounded-full ${firebaseReady && !errorGlobal ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                                {firebaseReady && !errorGlobal ? 'Conectado (Sin Auth)' : 'Desconectado / Error'}
+                        <div className="flex items-center gap-3">
+                            <button onClick={exportarExcel} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-900 transition-colors shadow-md">
+                                <span>📥</span> Descargar Reporte (Privado)
+                            </button>
+                            <div className={`text-xs px-3 py-1 rounded-full font-bold border ${firebaseReady ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                {firebaseReady ? '● Conectado' : '● Sin Conexión'}
                             </div>
                         </div>
                     </header>
 
-                    <div className="grid lg:grid-cols-3 gap-8">
-                        <div className="lg:col-span-2 space-y-6">
-                            <div className="card p-6 border-l-4 border-green-600">
-                                <h2 className="text-lg font-bold text-gray-700 mb-4 flex items-center gap-2">
-                                    <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg> Identificación
-                                </h2>
-                                <div className="mb-5">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tu Identidad (Evaluador)</label>
-                                    <select className="input-field font-medium text-gray-800 text-lg" value={evaluadorJson} onChange={(e) => setEvaluadorJson(e.target.value)}>
-                                        <option value="">-- Selecciona quién eres --</option>
-                                        {JEFATURAS.map((j, i) => (
-                                            <option key={i} value={JSON.stringify(j)}>{j.nombre} ({j.cargo})</option>
-                                        ))}
+                    {!evaluadoSeleccionado && (
+                        <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600 mb-8 fade-in">
+                            <h2 className="text-lg font-bold text-gray-700 mb-4">Configuración de Filtro</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">1. Soy el Gerente:</label>
+                                    <select className="w-full input-field p-3 border rounded bg-gray-50 font-bold text-gray-800" onChange={handleEvaluadorChange} value={evaluador ? evaluador.nombre : ""}>
+                                        <option value="">-- Identifícate --</option>
+                                        {GERENTES.map((g, i) => <option key={i} value={g.nombre}>{g.nombre}</option>)}
                                     </select>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Área a Evaluar</label>
-                                        <select className="input-field" value={areaObjetivo} onChange={(e) => { setAreaObjetivo(e.target.value); setEvaluadoObj(null); }}>
-                                            <option value="">-- Filtrar por Área --</option>
-                                            {areasUnicas.map(a => <option key={a} value={a}>{a}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Colaborador</label>
-                                        <select className="input-field" value={evaluadoObj ? evaluadoObj.nombre : ""} onChange={handleEvaluadoChange} disabled={!areaObjetivo}>
-                                            <option value="">{areaObjetivo ? (personalFiltrado.length > 0 ? `-- Seleccionar Persona --` : "-- Todos Evaluados --") : "-- Esperando Área --"}</option>
-                                            {personalFiltrado.map((p, i) => (<option key={i} value={p.nombre}>{p.nombre}</option>))}
-                                        </select>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">2. Gerencia Objetivo:</label>
+                                    <select className="w-full input-field p-3 border rounded disabled:bg-gray-100" disabled={!evaluador} value={targetGerencia} onChange={(e) => { setTargetGerencia(e.target.value); setTargetSector(""); }}>
+                                        <option value="">-- Seleccionar --</option>
+                                        {gerenciasDisponibles.map(area => <option key={area} value={area}>{area}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">3. Sector:</label>
+                                    <select className="w-full input-field p-3 border rounded disabled:bg-gray-100" disabled={!targetGerencia} value={targetSector} onChange={(e) => setTargetSector(e.target.value)}>
+                                        <option value="">-- Seleccionar --</option>
+                                        {sectoresDisponibles.map(sec => <option key={sec} value={sec}>{sec}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {!evaluadoSeleccionado && targetSector && (
+                        <div className="fade-in">
+                            <div className="flex justify-between items-end mb-4">
+                                <h3 className="text-xl font-bold text-gray-800">Colaboradores en <span className="text-green-600">{targetSector}</span></h3>
+                                <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded">{personalFiltrado.length} pendientes</span>
+                            </div>
+                            
+                            {personalFiltrado.length === 0 ? (
+                                <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
+                                    <p className="text-gray-400">No hay personal pendiente de evaluación en este sector.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {personalFiltrado.map((p, i) => (
+                                        <div key={i} className="bg-white rounded-xl card-shadow overflow-hidden hover:shadow-xl transition-all border border-gray-100 group relative">
+                                            <div className="p-5 flex items-start gap-4">
+                                                <div className="relative shrink-0">
+                                                    <img 
+                                                        src={`./fotos/${rutParaNombreArchivo(p.rut)}.jpg`}
+                                                        alt={p.nombre}
+                                                        className="w-16 h-16 rounded-full avatar-img shadow-sm group-hover:scale-105 transition-transform"
+                                                        onError={handleImageError}
+                                                    />
+                                                    <div className="w-16 h-16 rounded-full bg-green-100 border-2 border-green-200 flex items-center justify-center text-green-700 font-bold text-xl hidden shadow-sm">
+                                                        {p.nombre.charAt(0)}
+                                                    </div>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-bold text-gray-800 text-sm leading-tight mb-1 truncate" title={p.nombre}>{p.nombre}</h4>
+                                                    <p className="text-xs text-green-700 font-semibold mb-2 truncate">{p.cargo}</p>
+                                                    <span className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 font-mono">{p.rut}</span>
+                                                </div>
+                                            </div>
+                                            <div className="bg-gray-50 p-3 border-t border-gray-100 flex gap-2">
+                                                <button 
+                                                    onClick={() => ignorarColaborador(p.rut)}
+                                                    className="flex-1 py-2 bg-gray-100 text-gray-500 font-bold text-xs rounded hover:bg-gray-200 transition-colors"
+                                                    title="Ocultar de la lista"
+                                                >
+                                                    No lo conozco
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleCardClick(p)}
+                                                    className="flex-1 py-2 bg-white border border-green-500 text-green-600 font-bold text-xs rounded hover:bg-green-600 hover:text-white transition-colors shadow-sm"
+                                                >
+                                                    Evaluar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {evaluadoSeleccionado && (
+                        <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden fade-in relative mt-4">
+                            <div className="bg-green-50 p-6 border-b border-green-100 flex items-center gap-5">
+                                <div className="relative">
+                                     <img 
+                                        src={`./fotos/${rutParaNombreArchivo(evaluadoSeleccionado.rut)}.jpg`}
+                                        className="w-20 h-20 rounded-full border-4 border-white shadow-md object-cover"
+                                        onError={handleImageError}
+                                    />
+                                    <div className="w-20 h-20 rounded-full bg-white border-4 border-white flex items-center justify-center text-green-700 font-bold text-3xl hidden shadow-md absolute top-0 left-0">
+                                        {evaluadoSeleccionado.nombre.charAt(0)}
                                     </div>
                                 </div>
-                                {evaluadorJson && areaObjetivo && (
-                                    <p className="text-[10px] text-gray-400 mt-2 text-right italic">* Los nombres ya evaluados por ti no aparecen en la lista.</p>
-                                )}
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-800">{evaluadoSeleccionado.nombre}</h2>
+                                    <p className="text-green-700 font-medium">{evaluadoSeleccionado.cargo}</p>
+                                    <p className="text-xs text-gray-500 mt-1">RUT: {evaluadoSeleccionado.rut}</p>
+                                </div>
                             </div>
 
-                            <div className="card p-6 relative min-h-[500px]">
-                                {!evaluadorJson || !evaluadoObj ? (
-                                    <div className="absolute inset-0 bg-white/95 z-10 flex flex-col items-center justify-center text-center p-6 rounded-xl backdrop-blur-sm">
-                                        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400 shadow-inner">
-                                            <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                        </div>
-                                        <h3 className="font-bold text-xl text-gray-700">Esperando selección</h3>
-                                        <p className="text-gray-500 mt-2">Completa la configuración arriba para desbloquear el formulario.</p>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col sm:flex-row items-center gap-6 mb-8 p-6 bg-gradient-to-r from-green-50 to-white rounded-xl border border-green-100 shadow-sm">
-                                        <div className="relative">
-                                            <img 
-                                                src={getFotoUrl(evaluadoObj.rut)} 
-                                                alt={evaluadoObj.nombre} 
-                                                className="avatar-img shadow-md bg-white"
-                                                onError={(e) => {
-                                                    e.target.style.display = 'none';
-                                                    e.target.nextSibling.style.display = 'flex';
-                                                }}
-                                            />
-                                            <div className="avatar-placeholder shadow-md" style={{display: 'none'}}>
-                                                {evaluadoObj.nombre.charAt(0)}
-                                            </div>
-                                        </div>
-                                        <div className="text-center sm:text-left">
-                                            <h3 className="font-bold text-gray-800 text-xl">{evaluadoObj.nombre}</h3>
-                                            <p className="text-green-700 font-medium">{evaluadoObj.area}</p>
-                                            <div className="inline-block bg-gray-200 rounded px-2 py-1 mt-2 text-xs font-mono text-gray-600">
-                                                RUT: {evaluadoObj.rut || "No registrado"}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <h2 className="text-lg font-bold text-gray-700 mb-6 border-b pb-2">Criterios de Desempeño</h2>
-                                {['rendimiento', 'compromiso', 'frustracion', 'responsabilidad'].map((id, index) => (
-                                    <div key={id} className="mb-8">
-                                        <div className="flex items-baseline justify-between mb-3">
-                                            <label className="block font-bold text-gray-700 capitalize text-lg">
-                                                {index + 1}. {id === 'frustracion' ? 'Manejo de Frustración' : id}
-                                            </label>
-                                        </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="p-8">
+                                <h3 className="text-lg font-bold text-gray-700 mb-6 pb-2 border-b">Criterios de Evaluación</h3>
+                                
+                                {['rendimiento', 'compromiso', 'responsabilidad'].map((criterio) => (
+                                    <div key={criterio} className="mb-6">
+                                        <p className="font-bold text-gray-800 capitalize mb-3 text-sm">
+                                            {criterio}
+                                        </p>
+                                        <div className="grid grid-cols-4 gap-2">
                                             {niveles.map((n) => (
-                                                <label key={n.val} className={`radio-label border rounded-lg p-3 text-center transition-all ${scores[id] === n.val ? 'ring-2 ring-green-500 shadow-md transform scale-105 z-10 ' + n.color : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                                                    <input type="radio" name={id} value={n.val} checked={scores[id] === n.val} onChange={() => handleScore(id, n.val)} className="hidden" />
-                                                    <div className="font-bold text-2xl mb-1">{n.val}</div>
-                                                    <div className="text-xs uppercase font-bold tracking-wider">{n.label}</div>
+                                                <label key={n.val} className={`cursor-pointer border rounded-lg p-2 text-center transition-all ${scores[criterio] === n.val ? `ring-2 ring-green-500 bg-green-50 text-green-700 border-green-200 shadow-md transform scale-105` : 'bg-white text-gray-400 hover:bg-gray-50'}`}>
+                                                    <input type="radio" name={criterio} className="hidden" onClick={() => setScores({...scores, [criterio]: n.val})} />
+                                                    <div className="font-bold text-xl">{n.val}</div>
+                                                    <div className="text-[10px] uppercase font-bold">{n.label}</div>
                                                 </label>
                                             ))}
                                         </div>
                                     </div>
                                 ))}
-                                <div className="mt-8">
-                                    <label className="block font-bold text-gray-700 mb-2">Comentarios Adicionales (Opcional)</label>
-                                    <textarea className="input-field h-24 w-full resize-none" placeholder="Escribe aquí observaciones..." value={comentario} onChange={(e) => setComentario(e.target.value)}></textarea>
+
+                                <div className="mb-6">
+                                    <label className="block font-bold text-gray-700 text-sm mb-2">Comentarios (Opcional)</label>
+                                    <textarea 
+                                        className="w-full border border-gray-300 rounded-lg p-3 h-20 focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                                        placeholder="Observaciones adicionales..."
+                                        value={comentario}
+                                        onChange={e => setComentario(e.target.value)}
+                                    ></textarea>
                                 </div>
-                                <div className="mt-8 pt-6 border-t border-gray-100">
-                                    <button onClick={guardarEvaluacion} disabled={isSaving} className="w-full btn btn-primary flex justify-center items-center gap-3 text-lg py-4 shadow-lg active:scale-95 transform transition-transform">
-                                        {isSaving ? <div className="loader"></div> : <><svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg> Guardar Evaluación</>}
+
+                                <div className="flex gap-3">
+                                    <button onClick={() => setEvaluadoSeleccionado(null)} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition-colors border border-gray-200">Cancelar</button>
+                                    <button 
+                                        onClick={guardarEvaluacion} 
+                                        disabled={isSaving}
+                                        className="flex-[2] bg-green-700 text-white font-bold py-3 rounded-lg hover:bg-green-800 shadow-md flex justify-center items-center gap-2 transition-colors"
+                                    >
+                                        {isSaving ? <div className="loader"></div> : "Guardar"}
                                     </button>
                                 </div>
-                                {mensaje && <div className={`mt-4 p-4 text-center rounded-lg font-bold animate-bounce ${mensaje.includes('✅') ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{mensaje}</div>}
+                                {mensaje && <div className="mt-4 text-center font-bold text-green-700 bg-green-50 p-2 rounded text-sm fade-in">{mensaje}</div>}
                             </div>
                         </div>
-
-                        {/* Columna Derecha */}
-                        <div className="lg:col-span-1">
-                            <div className="card p-6 sticky top-6 bg-gray-50 border border-gray-200">
-                                <h3 className="font-bold text-gray-800 mb-4 flex justify-between items-center border-b pb-3 border-gray-200">
-                                    <span>Evaluaciones</span>
-                                    <span className="bg-green-600 text-white text-xs px-2 py-1 rounded-full shadow">{history.length}</span>
-                                </h3>
-                                <div className="max-h-[600px] overflow-y-auto space-y-3 mb-6 pr-1 custom-scrollbar">
-                                    {history.length === 0 ? (
-                                        <div className="text-center py-12 opacity-50">
-                                            <div className="text-4xl mb-2">📊</div>
-                                            <p className="text-sm text-gray-500">Aún no hay registros en esta sesión.</p>
-                                        </div>
-                                    ) : (
-                                        history.map((h, i) => (
-                                            <div key={i} className="bg-white p-3 rounded-lg border border-gray-200 text-sm shadow-sm hover:shadow-md transition-shadow">
-                                                <div className="flex justify-between font-bold text-gray-800 mb-1">
-                                                    <span className="truncate w-3/4" title={h.evaluado_nombre}>{h.evaluado_nombre}</span>
-                                                    <span className={`px-2 rounded text-xs flex items-center ${h.promedio >= 2.5 ? 'bg-green-100 text-green-800' : h.promedio >= 1.5 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
-                                                        {h.promedio}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                    <span className="w-2 h-2 rounded-full bg-gray-300"></span> Eval: *CONFIDENCIAL*
-                                                </p>
-                                                <div className="flex justify-between text-[10px] text-gray-400 mt-2 border-t pt-1">
-                                                    <span>{h.fecha}</span>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                                <button onClick={exportarExcel} disabled={isDownloading} className="w-full btn bg-slate-800 text-white hover:bg-slate-900 flex justify-center items-center gap-2 text-sm py-3 shadow-md">
-                                    {isDownloading ? <div className="loader"></div> : <><svg className="w-4 h-4 inline mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg> Descargar Excel Privado</>}
-                                </button>
-                                <p className="text-[10px] text-center text-gray-400 mt-3 leading-tight">* El archivo Excel generado es confidencial y toma los datos directamente de la base de datos.</p>
-                            </div>
-                        </div>
-                    </div>
+                    )}
                 </div>
             );
         };
