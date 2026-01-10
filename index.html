@@ -21,6 +21,8 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        /* Modal Styles */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
     </style>
 </head>
 <body>
@@ -48,9 +50,10 @@
             firebaseReady = true;
         } catch (error) { console.error("Firebase Error:", error); }
 
-        // --- 2. BASE DE DATOS MAESTRA (ACTUALIZADA DESDE LISTADO.txt) ---
+        // --- 2. BASE DE DATOS MAESTRA ---
+        // (Mantenemos la misma DB proporcionada en el ejemplo anterior)
         const DB_MAESTRA = [
-            // GDO - DESARROLLO ORGANIZACIONAL
+            // GDO
             {rut:"009.743.891-9", nombre:"EDUARDO ENRIQUE MUÑOZ SOTO", cargo:"OPERADOR DE GRUA C", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
             {rut:"013.353.998-0", nombre:"VIVIANA DE LAS MERCE NAVARRO SALAZAR", cargo:"AUXILIAR ASEO EXTERIORES Y MAN", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
             {rut:"013.783.541-K", nombre:"RODOLFO LEONARDO MONARTE ROJAS", cargo:"JEFE DE TURNO PACKING", area:"GDO", sector:"GERENCIA DESARROLLO ORGANIZACIONAL"},
@@ -230,7 +233,6 @@
             {rut:"13126260-4", nombre:"DANIEL MADRID CERECEDA", cargo:"JEFE DE OPERACIONES", area:"OPERACIONES", sector:"FRIGORIFICO"},
 
             // ASEGURAMIENTO DE CALIDAD
-            // --- ASEGURAMIENTO DE CALIDAD ---
             {rut:"014.255.630-8", nombre:"LEOPOLDO ANTONIO ZAMORANO GONZALEZ", cargo:"COORDINADOR CALIDAD RECEPCION", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
             {rut:"015.131.623-9", nombre:"KAREN ANDREA LEAL GONZALEZ", cargo:"ENCARGADO DE TURNO CALIDAD", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
             {rut:"016.289.931-7", nombre:"MASSIEL ARIAS VASQUEZ", cargo:"CONTROL DE CALIDAD RECEPCIÓN", area:"ASEGURAMIENTO DE CALIDAD", sector:"ASEGURAMIENTO DE CALIDAD"},
@@ -315,7 +317,7 @@
             if (!rutRaw) return "";
             let valor = rutRaw.replace(/\./g, "").replace(/-/g, "").toUpperCase();
             if (valor.length < 2) return valor;
-            valor = valor.replace(/^0+/, ""); // Quita ceros iniciales visualmente
+            valor = valor.replace(/^0+/, "");
             let cuerpo = valor.slice(0, -1);
             let dv = valor.slice(-1);
             return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "-" + dv;
@@ -328,11 +330,136 @@
             let cuerpo = limpio.slice(0, -1);
             let dv = limpio.slice(-1);
             let cuerpoConPuntos = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-            // Retorna formato X.XXX.XXX-X (coincide con archivos)
             return `${cuerpoConPuntos}-${dv}`;
         };
 
-        // --- 4. COMPONENTE APP ---
+        // --- 4. DASHBOARD COMPONENT ---
+        const DashboardStats = ({ onClose, history }) => {
+            const stats = useMemo(() => {
+                let totalUniversoGeneral = 0;
+                let totalEvaluadosGeneral = 0;
+
+                const data = GERENTES.map(gerente => {
+                    // Universo: Todos los empleados que NO son de su área
+                    const universe = DB_MAESTRA.filter(p => p.area !== gerente.area).length;
+                    
+                    // Evaluados por este gerente (que tengan promedio, es decir, evaluados realmente)
+                    const evaluated = history.filter(h => h.evaluador_nombre === gerente.nombre && h.promedio).length;
+                    
+                    // Ignorados/Desconocidos por este gerente
+                    const unknown = history.filter(h => h.evaluador_nombre === gerente.nombre && h.estado === 'desconocido').length;
+
+                    // Pendientes
+                    const pending = universe - (evaluated + unknown);
+
+                    totalUniversoGeneral += universe;
+                    totalEvaluadosGeneral += evaluated;
+
+                    return {
+                        nombre: gerente.nombre,
+                        area: gerente.area,
+                        universe,
+                        evaluated,
+                        unknown,
+                        pending,
+                        percent: universe > 0 ? ((evaluated / universe) * 100).toFixed(1) : 0,
+                        percentUnknown: universe > 0 ? ((unknown / universe) * 100).toFixed(1) : 0
+                    };
+                });
+
+                // Ordenar por porcentaje de avance (mayor a menor)
+                data.sort((a,b) => parseFloat(b.percent) - parseFloat(a.percent));
+                
+                const percentGeneral = totalUniversoGeneral > 0 ? ((totalEvaluadosGeneral / totalUniversoGeneral) * 100).toFixed(1) : 0;
+
+                return { data, percentGeneral, totalUniversoGeneral, totalEvaluadosGeneral };
+            }, [history]);
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center modal-overlay p-4 fade-in">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="bg-slate-800 p-6 flex justify-between items-center shrink-0">
+                            <div>
+                                <h2 className="text-2xl font-bold text-white">Tablero de Control de Avance</h2>
+                                <p className="text-slate-400 text-sm">Estado actual de la evaluación 360°</p>
+                            </div>
+                            <button onClick={onClose} className="text-white hover:bg-slate-700 p-2 rounded-full transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto flex-1">
+                            {/* General Stats Card */}
+                            <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-8 flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-bold text-green-800">Cumplimiento Global</h3>
+                                    <p className="text-green-600 text-sm">Porcentaje total de evaluaciones realizadas vs posibles</p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-4xl font-bold text-green-700">{stats.percentGeneral}%</span>
+                                    <p className="text-xs font-bold text-green-600 uppercase">{stats.totalEvaluadosGeneral} de {stats.totalUniversoGeneral} evaluaciones</p>
+                                </div>
+                            </div>
+
+                            {/* Detailed Table */}
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-gray-500">
+                                    <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                                        <tr>
+                                            <th scope="col" className="px-6 py-3 rounded-l-lg">Gerente Evaluador</th>
+                                            <th scope="col" className="px-6 py-3 text-center">Universo Total</th>
+                                            <th scope="col" className="px-6 py-3 text-center">Evaluados (OK)</th>
+                                            <th scope="col" className="px-6 py-3 text-center">No Conoce</th>
+                                            <th scope="col" className="px-6 py-3 text-center">Pendientes</th>
+                                            <th scope="col" className="px-6 py-3 rounded-r-lg w-1/4">Barra de Progreso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stats.data.map((row, index) => (
+                                            <tr key={index} className="bg-white border-b hover:bg-gray-50">
+                                                <td className="px-6 py-4 font-bold text-gray-900">
+                                                    {row.nombre}
+                                                    <span className="block text-[10px] text-gray-400 font-normal">{row.area}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center font-mono">{row.universe}</td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-0.5 rounded border border-green-200">{row.evaluated}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                     <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-0.5 rounded border border-gray-200">{row.unknown}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center font-bold text-red-500">{row.pending}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="w-full bg-gray-200 rounded-full h-4 mb-1 overflow-hidden flex">
+                                                        <div className="bg-green-600 h-4 flex items-center justify-center text-[9px] text-white font-bold" style={{width: `${row.percent}%`}}>
+                                                            {parseFloat(row.percent) > 10 && `${row.percent}%`}
+                                                        </div>
+                                                        <div className="bg-gray-400 h-4 flex items-center justify-center text-[9px] text-white font-bold" style={{width: `${row.percentUnknown}%`}} title="% No conocidos">
+                                                            
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex justify-between text-[10px] text-gray-400">
+                                                        <span>{row.percent}% Completado</span>
+                                                        <span>{row.percentUnknown}% Desconocido</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 p-4 text-right border-t border-gray-200">
+                            <button onClick={onClose} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold hover:bg-slate-900 transition-colors">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 5. COMPONENTE APP ---
         const App = () => {
             const [evaluador, setEvaluador] = useState(null);
             const [targetGerencia, setTargetGerencia] = useState("");
@@ -345,13 +472,11 @@
             const [mensaje, setMensaje] = useState("");
             const [isSaving, setIsSaving] = useState(false);
             const [history, setHistory] = useState([]);
-            
-            // Estado para ignorados (Session)
-            const [ignorados, setIgnorados] = useState(new Set());
+            const [showStats, setShowStats] = useState(false);
 
             useEffect(() => {
                 if (firebaseReady && db) {
-                    db.collection("evaluaciones").orderBy("id", "desc").onSnapshot(s => {
+                    db.collection("evaluaciones").onSnapshot(s => {
                         setHistory(s.docs.map(d => d.data()));
                     });
                 }
@@ -372,7 +497,8 @@
                 if (targetGerencia && targetSector) {
                     let listado = DB_MAESTRA.filter(p => p.area === targetGerencia && p.sector === targetSector);
                     
-                    const yaEvaluados = new Set(
+                    // Filtrar gente ya evaluada O marcada como desconocida en Firebase
+                    const yaProcesados = new Set(
                         history
                             .filter(h => h.evaluador_nombre === evaluador.nombre)
                             .map(h => h.evaluado_rut)
@@ -380,14 +506,14 @@
                     
                     const listadoFinal = listado
                         .map(p => ({...p, rut: formatearRut(p.rut)}))
-                        .filter(p => !yaEvaluados.has(p.rut) && !ignorados.has(p.rut))
+                        .filter(p => !yaProcesados.has(p.rut))
                         .sort((a,b) => a.nombre.localeCompare(b.nombre));
 
                     setPersonalFiltrado(listadoFinal);
                 } else {
                     setPersonalFiltrado([]);
                 }
-            }, [targetGerencia, targetSector, evaluador, history, ignorados]);
+            }, [targetGerencia, targetSector, evaluador, history]);
 
             const handleEvaluadorChange = (e) => {
                 const nombre = e.target.value;
@@ -396,7 +522,6 @@
                 setTargetGerencia("");
                 setTargetSector("");
                 setEvaluadoSeleccionado(null);
-                setIgnorados(new Set()); 
             };
 
             const handleCardClick = (persona) => {
@@ -410,10 +535,35 @@
                 e.target.nextSibling.style.display = 'flex';
             };
 
-            const ignorarColaborador = (rut) => {
-                const nuevosIgnorados = new Set(ignorados);
-                nuevosIgnorados.add(rut);
-                setIgnorados(nuevosIgnorados);
+            // MODIFICADO: Ahora guarda en Firebase el estado "desconocido"
+            const ignorarColaborador = async (rut, nombre, cargo) => {
+                if(!window.confirm(`¿Confirmas que NO conoces a ${nombre}? Se marcará como procesado.`)) return;
+                
+                const registro = {
+                    id: Date.now(),
+                    fecha: new Date().toLocaleDateString("es-CL"),
+                    evaluador_nombre: evaluador.nombre,
+                    evaluador_area: evaluador.area,
+                    evaluado_nombre: nombre,
+                    evaluado_rut: rut,
+                    evaluado_cargo: cargo,
+                    evaluado_area: targetGerencia,
+                    evaluado_sector: targetSector,
+                    estado: "desconocido", // Flag importante
+                    promedio: 0,
+                    comentarios: "No conoce al colaborador"
+                };
+
+                if (firebaseReady && db) {
+                    try {
+                        await db.collection("evaluaciones").add(registro);
+                        // El snapshot actualizará la lista automáticamente
+                    } catch (e) {
+                        alert("Error al guardar estado");
+                    }
+                } else {
+                    setHistory([registro, ...history]);
+                }
             };
 
             const exportarExcel = () => {
@@ -425,13 +575,14 @@
                     const { evaluador_nombre, evaluador_area, ...resto } = row; 
                     return {
                         ...resto,
-                        "ORIGEN": "CONFIDENCIAL" 
+                        "ORIGEN": "CONFIDENCIAL",
+                        "TIPO_REGISTRO": row.estado === "desconocido" ? "NO CONOCIDO" : "EVALUACION"
                     };
                 });
                 const ws = XLSX.utils.json_to_sheet(datosConfidenciales);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Evaluaciones_Confidenciales");
-                XLSX.writeFile(wb, "Reporte_Evaluaciones_Anonimo.xlsx");
+                XLSX.writeFile(wb, "Reporte_Evaluaciones_Full.xlsx");
             };
 
             const guardarEvaluacion = async () => {
@@ -453,6 +604,7 @@
                     evaluado_cargo: evaluadoSeleccionado.cargo,
                     evaluado_area: targetGerencia,
                     evaluado_sector: targetSector,
+                    estado: "evaluado",
                     ...scores,
                     promedio: promedio.toFixed(2),
                     comentarios: comentario || "Sin comentarios"
@@ -494,15 +646,20 @@
                                 <p className="text-xs text-green-600 font-bold uppercase tracking-wide">Aurora Australis S.A.</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3 justify-center">
+                            <button onClick={() => setShowStats(true)} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors shadow-md">
+                                <span>📊</span> Ver Avance por Gerencia
+                            </button>
                             <button onClick={exportarExcel} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-slate-900 transition-colors shadow-md">
-                                <span>📥</span> Descargar Reporte (Privado)
+                                <span>📥</span> Excel Full
                             </button>
                             <div className={`text-xs px-3 py-1 rounded-full font-bold border ${firebaseReady ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                 {firebaseReady ? '● Conectado' : '● Sin Conexión'}
                             </div>
                         </div>
                     </header>
+                    
+                    {showStats && <DashboardStats onClose={() => setShowStats(false)} history={history} />}
 
                     {!evaluadoSeleccionado && (
                         <div className="bg-white p-6 rounded-xl shadow-md border-t-4 border-green-600 mb-8 fade-in">
@@ -542,7 +699,7 @@
                             
                             {personalFiltrado.length === 0 ? (
                                 <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-                                    <p className="text-gray-400">No hay personal pendiente de evaluación en este sector.</p>
+                                    <p className="text-gray-400">✅ ¡Todo listo! No hay personal pendiente de evaluación en este sector.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -568,9 +725,9 @@
                                             </div>
                                             <div className="bg-gray-50 p-3 border-t border-gray-100 flex gap-2">
                                                 <button 
-                                                    onClick={() => ignorarColaborador(p.rut)}
+                                                    onClick={() => ignorarColaborador(p.rut, p.nombre, p.cargo)}
                                                     className="flex-1 py-2 bg-gray-100 text-gray-500 font-bold text-xs rounded hover:bg-gray-200 transition-colors"
-                                                    title="Ocultar de la lista"
+                                                    title="Marcar como Desconocido (se guardará)"
                                                 >
                                                     No lo conozco
                                                 </button>
